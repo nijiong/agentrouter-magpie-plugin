@@ -24,8 +24,9 @@ import { loadTextFilter } from "./content-filter.mjs";
 //    credit is granted at sign-in instead (the site's login response
 //    carries checked_in, and its settings keep DailyCheckinQuota), so
 //    there is nothing for a plugin to claim after the fact. The check-in
-//    hook signs in with the account's username and password, which the user
-//    enters at sign-in; this build offers no other method.
+//    hook signs in again with the account's username and password, which the
+//    user enters at sign-in; a login the site accepts completes the check-in,
+//    and this build offers no other method.
 //
 // 3. /api/user/self reports quota and used_quota, but often returns an
 //    Aliyun slider-captcha page instead. Try it with an access token or
@@ -474,8 +475,9 @@ async function signIn(provider, auth) {
       ? { quota, used, name: d.username ?? d.display_name ?? "" }
       : undefined;
   if (balance) balance.total = balance.quota + balance.used;
-  // `checked_in: true` means *this* sign-in granted the day's credit. A false
-  // means no new grant; a missing/non-boolean marker proves nothing.
+  // `checked_in: true` means the site reported a new grant for *this* sign-in.
+  // A false or missing marker changes nothing about the login itself: the site
+  // counts the completed sign-in as the day's check-in either way.
   const session = sessionOf(res);
   return {
     ok: true,
@@ -652,24 +654,27 @@ async function usageOf(getAuth, provider) {
   };
 }
 
-// A completed login and a confirmed reward are different results.
+// The check-in is the login: the site counts a successful sign-in as the
+// day's check-in, so an accepted login settles the day on its own.
+// `checked_in` only says whether the site reported a new grant on top of it.
 function checkinResult(checkedIn) {
-  if (checkedIn === true) return { outcome: "claimed", message: "AgentRouter：站点确认本次登录签到成功，新增额度已到账" };
-  if (checkedIn === false) return { outcome: "done", message: "AgentRouter：已完成登录，站点返回本次未新增签到额度（checked_in=false）" };
-  return { outcome: "failed", message: "AgentRouter：登录成功但站点未返回有效签到标记，无法确认额度发放" };
+  if (checkedIn === true) return { outcome: "claimed", message: "AgentRouter：签到完成（已重新登录），站点确认新增额度已到账" };
+  if (checkedIn === false) return { outcome: "done", message: "AgentRouter：签到完成（已重新登录），站点返回本次未新增额度（checked_in=false）" };
+  return { outcome: "done", message: "AgentRouter：签到完成（已重新登录）；站点未返回签到标记，是否新增额度以站点账号为准" };
 }
 
-// checkinOf claims the day's credit the only way this site grants one: by
-// signing in with the account's username and password. The site has no
+// checkinOf checks the day in the only way this site counts one: by signing
+// in again with the account's username and password. The site has no
 // /api/user/checkin — that path falls through to New API's admin route
 // /api/user/:id and answers every ordinary account "权限不足", the same as
-// /api/user/foo would — and its front end says "签到成功，新增额度已到账"
-// when a login response carries checked_in. So signing in *is* the check-in.
+// /api/user/foo would — and its daily credit is granted at sign-in. So a
+// login the site accepts *is* the completed check-in, whether or not the
+// response carries checked_in; that marker is only extra confirmation.
 //
-// What comes back is `claimed` when this sign-in granted the day, and `done`
-// when the site explicitly reports no new grant (not proof of an earlier one). A
-// wrong password is the account's to fix and settles for the day; a site
-// that is down is retried, as magpie retries any `failed`.
+// What comes back is `claimed` when the site reports a new grant and `done`
+// when the login completed without one. A wrong password is the account's to
+// fix and settles for the day; a site that is down is retried, as magpie
+// retries any `failed`.
 async function checkinOf(getAuth, provider) {
   const auth = await getAuth();
   if (!auth) return { outcome: "failed", message: "AgentRouter：尚未登录" };

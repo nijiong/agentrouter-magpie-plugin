@@ -56,9 +56,12 @@ test("explicit false reports no new grant, not an invented previous payout", asy
 });
 
 for (const value of [undefined, "true", 1, null]) {
-  test("missing/non-boolean reward marker is not success: " + value, async () => {
-    const {result} = await run(account, [login({id: 42, checked_in: value})]);
-    assert.equal(result.outcome, "failed");
+  test("a completed login checks in without a usable reward marker: " + value, async () => {
+    const {result, calls} = await run(account, [login({id: 42, checked_in: value})]);
+    assert.equal(result.outcome, "done");
+    assert.match(result.message, /签到完成/);
+    assert.doesNotMatch(result.message, /已到账/);
+    assert.equal(calls.length, 1);
   });
 }
 
@@ -90,9 +93,11 @@ test("legacy stored credentials still drive the login check-in", async () => {
   assert.equal(JSON.parse(calls[0].init.body).username, "legacy");
 });
 
-test("login without a reward marker is not done", async () => {
-  const {result} = await run(account, [login({id: 42})]);
-  assert.equal(result.outcome, "failed");
+test("the login alone completes the check-in", async () => {
+  const {result, calls} = await run(account, [login({id: 42})]);
+  assert.equal(result.outcome, "done");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url.pathname, "/api/user/login");
 });
 
 test("check-in prompts never ask for a removed credential", async () => {

@@ -8,7 +8,7 @@ import { initialize, runOnce, status } from "../local-checkin.mjs";
 for (const scenario of [
   { name: "server confirms a new reward", marker: true, outcome: "claimed", paused: false },
   { name: "no new reward is not reported as claimed", marker: false, outcome: "done", paused: false },
-  { name: "missing reward marker pauses local automation", outcome: "failed", paused: true },
+  { name: "a completed login checks in without a reward marker", outcome: "done", paused: false },
   { name: "captcha HTML pauses without browser fallback", html: true, outcome: "failed", paused: true },
 ]) {
   test("local default hook: " + scenario.name, async () => {
