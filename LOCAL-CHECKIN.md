@@ -13,7 +13,7 @@ node ./src/local-checkin.mjs init
 
 默认数据目录位于仓库外：Windows 为 `%LOCALAPPDATA%/AgentRouterCheckin`，Linux/macOS 为 `~/.local/share/agentrouter-checkin`。其中 `config.json` 保存站点与用户 ID，`credentials.txt` 保存仅本机使用的站点账号密码。初始化不会覆盖已有配置，也不会取得或填写真实凭据。**不要把这些文件发到聊天、截图、日志或 Git。**
 
-填写凭据前必须检查目录权限。Unix 工具要求目录对其他用户无权限；Windows 初始化通过系统原生 icacls 收紧专用目录 ACL，运行前再次检查目录及配置/凭据/状态文件的 ACL；检查失败会拒绝运行，不能仅靠 Node 的文件 mode 断言安全。文件为明文，不是加密保险箱；管理员和本机恶意软件仍可能读取。不要放在代码仓库、共享目录、同步盘、网盘或公共临时目录。初始化拒绝任意带 .git 祖先的目录（包括通过父目录 junction 到达的仓库），也拒绝工具所在目录。
+填写凭据前必须检查目录权限。Unix 工具要求目录对其他用户无权限；Windows 初始化通过系统原生 icacls 收紧专用目录 ACL，运行前再次检查目录及配置/凭据/状态文件的 ACL；检查失败会拒绝运行，不能仅靠 Node 的文件 mode 断言安全。文件为明文，不是加密保险箱；管理员和本机恶意软件仍可能读取。不要放在代码仓库、共享目录、同步盘、网盘或公共临时目录。初始化拒绝任意带 .git 祖先的目录（包括通过父目录 junction 到达的仓库），也拒绝插件仓库目录本身。
 
 Windows ACL 中当前用户可能被系统序列化为 `LA` 等短名。工具通过给临时探针目录仅授予当前完整 SID、移除继承并再次原生导出，绑定这个短名；不会全局放行 `LA`，也不会仅凭 SID 的 `-500` 后缀认定是本机管理员。探针和真实 ACL 无法确认时均拒绝运行。Linux 的目录 `0700`、新建凭据文件 `0600` 及运行前权限检查保持不变。本仓库不含 CI，全部测试由维护者在本机执行。
 
@@ -38,10 +38,10 @@ Windows ACL 中当前用户可能被系统序列化为 `LA` 等短名。工具�
 node ./src/local-checkin.mjs status
 
 # 手动请求一次；凭据齐全、未暂停且已到期时才会联网
-node ./local-checkin.mjs run
+node ./src/local-checkin.mjs run
 
 # 保持当前窗口运行，按持久化的 24 小时间隔签到
-node ./local-checkin.mjs watch
+node ./src/local-checkin.mjs watch
 ```
 
 首次真实运行前，请自行核对账号、配置与文件权限；不要向他人发送凭据文件内容。初始化不会启动 watch、后台作业、自启动或计划任务，只有明确执行相应命令才会运行。

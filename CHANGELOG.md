@@ -12,7 +12,7 @@
 - 签到判定与服务端一致：服务端按登录计签到，因此**重新调用登录接口成功即完成签到**；`checked_in` 降级为“是否新增额度”的附加信息，缺失或非布尔值不再判为失败（记为 `done`）。`claimed` 仍只在站点明确返回 `true` 时给出。
 - 登录/余额错误不再回显站点响应正文，避免凭据经错误信息泄漏。
 - 移除源码中写死的账号与密码：登录表单不再预填任何凭据，账号密码必须由用户手动输入，成功后保存到账号 metadata；未保存凭据时登录、签到与余额的密码回落均在本地拒绝，不发起请求。
-- 仓库整理：全部回归测试统一移至 `test/` 目录，`npm test` 与 `npm run test:headers` 同步更新。
+- 仓库整理：全部回归测试统一移至 `test/` 目录，插件源码（`index.mjs`、`request.mjs`、`response.mjs`、`body-inspection.mjs`、`content-filter.mjs` 及示例词表、`local-checkin.mjs`、`windows-acl.mjs`）统一移至 `src/` 目录；`package.json` 的 `main`/`exports`/`files` 与全部测试导入路径同步更新，`npm test` 与 `npm run test:headers` 命令不变。
 - 死代码清理：删除无引用的 `github-cookie.mjs` 与 `CHECKIN_TIMEOUT` 常量，合并重复注释块；文档移除已失效的 0.1.8 及以下上游历史章节与版本标注。
 - 作为独立插件维护：解除对上游仓库的 git 追踪，仓库地址与安全报告渠道改为本仓库；保留 MIT 许可与原作者版权声明，并在 README 与本页补充[出处与致谢](<#出处与致谢>)。
 - 移除全部 GitHub 自动化：删除 `.github/` 目录（CI、CodeQL、PR 审查工作流、PR 策略脚本、dependabot、Issue/PR 模板、CODEOWNERS）及仅服务于 CI 的 `test/pr-policy.test.cjs`、`test/windows-test-temp.ps1`，同时移除 `npm run test:policy`。验证改为完全由维护者本地执行。
