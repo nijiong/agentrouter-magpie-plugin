@@ -1,10 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import plugin from "./index.mjs";
+import plugin from "../index.mjs";
 
 const url = "https://example.test/v1/responses";
 const auth = { type: "api", key: "synthetic-model-key", metadata: {
-  githubCookieMode: "configure", githubCookie: "user_session=synthetic-github-cookie; logged_in=yes",
   cookie: "session=synthetic-site-cookie", accessToken: "synthetic-access-token", userId: "123",
 } };
 
@@ -25,7 +24,7 @@ test("login cookies and site token never enter model requests during inline repl
     assert.equal(headers.get("authorization"), "Bearer synthetic-model-key");
     assert.equal(headers.has("cookie"), false);
     const wire = JSON.stringify({ headers: [...headers], body: sent.body });
-    for (const privateValue of ["synthetic-github-cookie", "synthetic-site-cookie", "synthetic-access-token"])
+    for (const privateValue of ["synthetic-site-cookie", "synthetic-access-token"])
       assert.equal(wire.includes(privateValue), false);
     assert.equal(JSON.parse(sent.body).input[0].id, enabled ? undefined : "msg_resource_a");
     assert.deepEqual(JSON.parse(sent.body).input[0].content, JSON.parse(body).input[0].content);

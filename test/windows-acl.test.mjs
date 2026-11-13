@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { currentWindowsTrustee, isPrivateWindowsAcl } from "./windows-acl.mjs";
+import { currentWindowsTrustee, isPrivateWindowsAcl } from "../windows-acl.mjs";
 
 const localUser = "S-1-5-21-111-222-333-1001";
 const domainAdministrator = "S-1-5-21-444-555-666-500";

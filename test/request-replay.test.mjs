@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import plugin from "./index.mjs";
+import plugin from "../index.mjs";
 
-const url = "https://agentrouter.org/v1/responses";
+const url = "https://ps.air-outer.com/v1/responses";
 const history = () => ({ model: "model", store: true, stream: true, input: [
   { role: "user", content: "Keep the literal msg_old and call_old in this text." },
   { type: "message", id: "msg_old", role: "assistant", status: "completed", phase: "commentary", content: [{ type: "output_text", text: "Checking", annotations: [] }] },
@@ -12,7 +12,7 @@ const history = () => ({ model: "model", store: true, stream: true, input: [
 ], tools: [{ type: "function", name: "lookup", parameters: { type: "object", properties: { id: { type: "string" } } } }] });
 async function loader(enabled = true) {
   const p = await plugin({ magpie: { option: (_provider, name) => name === "portable-responses" ? enabled : true } });
-  return p.auth.loader(async () => ({ type: "api", key: "test-key", metadata: { site: "org" } }), {});
+  return p.auth.loader(async () => ({ type: "api", key: "test-key" }), {});
 }
 async function capture(t, input, init, enabled = true) {
   const old = globalThis.fetch; let seen;
@@ -56,7 +56,7 @@ for (const state of [{ previous_response_id: "resp_remote" }, { conversation: "c
   });
 }
 for (const path of ["/v1/chat/completions", "/v1/responses/compact"]) test("other endpoints stay byte-identical: " + path, async t => {
-  const body = JSON.stringify(history()); const seen = await capture(t, "https://agentrouter.org" + path, { method: "POST", body }); assert.equal(seen.init.body, body);
+  const body = JSON.stringify(history()); const seen = await capture(t, "https://ps.air-outer.com" + path, { method: "POST", body }); assert.equal(seen.init.body, body);
 });
 test("unknown and non-self-contained items retain every field", async t => {
   const before = { store: false, input: [ { type: "reasoning", id: "rs_reference", summary: [] }, { type: "future_item", id: "future_1", payload: "opaque" }, { type: "function_call", id: "fc_reference" }, { type: "compaction", id: "cmp_1", encrypted_content: "opaque" } ] };
@@ -115,14 +115,14 @@ test("explicit non-JSON content type leaves even JSON-looking data alone", async
   const seen = await capture(t, url, { method: "POST", body, headers: { "content-type": "text/plain" } }); assert.equal(seen.init.body, body);
 });
 test("oversized Request clones stop without consuming the original", async t => {
-  const { prepareResponsesRequest } = await import("./request.mjs");
+  const { prepareResponsesRequest } = await import("../request.mjs");
   const body = JSON.stringify({ ...history(), extra: "x".repeat(4 * 1024 * 1024) });
   const req = new Request(url, { method: "POST", body, headers: { "content-type": "application/json" } });
   const init = {}; assert.equal(await prepareResponsesRequest(req, init), init);
   assert.equal(await req.text(), body);
 });
 test("a stalled clone respects the preparation deadline", { timeout: 7000 }, async t => {
-  const { prepareResponsesRequest } = await import("./request.mjs");
+  const { prepareResponsesRequest } = await import("../request.mjs");
   const req = new Request(url, { method: "POST", body: new ReadableStream({ start() {} }), duplex: "half" });
   t.after(() => { void req.body.cancel().catch(() => {}); });
   const init = {}; assert.equal(await prepareResponsesRequest(req, init), init);

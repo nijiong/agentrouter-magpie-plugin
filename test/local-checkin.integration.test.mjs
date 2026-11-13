@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { initialize, runOnce, status } from "./local-checkin.mjs";
+import { initialize, runOnce, status } from "../local-checkin.mjs";
 
 for (const scenario of [
   { name: "server confirms a new reward", marker: true, outcome: "claimed", paused: false },
   { name: "no new reward is not reported as claimed", marker: false, outcome: "done", paused: false },
   { name: "missing reward marker pauses local automation", outcome: "failed", paused: true },
-  { name: "GitHub HTML pauses without browser fallback", html: true, outcome: "ineligible", paused: true },
+  { name: "captcha HTML pauses without browser fallback", html: true, outcome: "failed", paused: true },
 ]) {
   test("local default hook: " + scenario.name, async () => {
     const home = await fs.mkdtemp(path.join(os.tmpdir(), "ar-local-integration-"));
@@ -17,33 +17,19 @@ for (const scenario of [
     const calls = [];
     try {
       await initialize(home);
-      await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "org", userId: "42" }));
-      await fs.writeFile(path.join(home, "github-cookie.txt"), "user_session=offline-test-only");
+      await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "air", userId: "42" }));
+      await fs.writeFile(path.join(home, "credentials.txt"), "offline-user:offline-test-only");
       globalThis.fetch = async (input, options) => {
         const url = new URL(input);
         const headers = new Headers(options.headers);
         calls.push(url.origin + url.pathname);
-        assert.equal(options.redirect, "manual");
+        assert.equal(url.origin, "https://ps.air-outer.com");
+        assert.equal(url.pathname, "/api/user/login");
+        assert.equal(options.method, "POST");
         assert.equal(headers.has("authorization"), false);
-        assert.equal(headers.has("new-api-user"), false);
-        if (url.origin === "https://github.com") {
-          assert.equal(url.pathname, "/login/oauth/authorize");
-          assert.equal(headers.get("cookie"), "user_session=offline-test-only");
-          if (scenario.html) return new Response("manual consent required", { headers: { "content-type": "text/html" } });
-          return new Response(null, { status: 302, headers: { location: "https://agentrouter.org/oauth/github?code=offline-code&state=offline-state" } });
-        }
-        assert.equal(url.origin, "https://agentrouter.org");
-        assert.ok(!String(headers.get("cookie")).includes("offline-test-only"));
-        if (url.pathname === "/api/status") {
-          assert.equal(headers.has("cookie"), false);
-          return Response.json({ success: true, data: { github_oauth: true, github_client_id: "test-client" } });
-        }
-        if (url.pathname === "/api/oauth/state") {
-          assert.equal(headers.has("cookie"), false);
-          return Response.json({ success: true, data: "offline-state" }, { headers: { "set-cookie": "session=fresh-site-state; Secure; HttpOnly" } });
-        }
-        assert.equal(url.pathname, "/api/oauth/github");
-        assert.equal(headers.get("cookie"), "session=fresh-site-state");
+        assert.equal(headers.has("cookie"), false);
+        assert.deepEqual(JSON.parse(options.body), { username: "offline-user", password: "offline-test-only" });
+        if (scenario.html) return new Response("<!doctype html><html>captcha</html>", { headers: { "content-type": "text/html" } });
         return Response.json({ success: true, data: { id: 42, checked_in: scenario.marker } });
       };
       const now = () => 1_800_000_000_000;
@@ -52,12 +38,12 @@ for (const scenario of [
       const state = await status(home);
       assert.equal(state.paused, scenario.paused);
       const count = calls.length;
-      assert.equal(count, scenario.html ? 3 : 4);
+      assert.equal(count, 1);
       const second = await runOnce(home, { now });
       assert.equal(second.outcome, scenario.paused ? "paused" : "skipped");
       assert.equal(calls.length, count);
       const persisted = await fs.readFile(path.join(home, "state.json"), "utf8");
-      assert.doesNotMatch(persisted, /offline-test-only|offline-code|fresh-site-state/);
+      assert.doesNotMatch(persisted, /offline-test-only|offline-user/);
     } finally {
       globalThis.fetch = previousFetch;
       assert.equal(path.dirname(home), os.tmpdir());
@@ -68,12 +54,12 @@ for (const scenario of [
 
 for (const initial of ["claimed", "failed"]) {
   test("resume preserves 24h gate after " + initial, async () => {
-    const { resume } = await import("./local-checkin.mjs");
+    const { resume } = await import("../local-checkin.mjs");
     const home = await fs.mkdtemp(path.join(os.tmpdir(), "ar-local-recovery-"));
     try {
       await initialize(home);
-      await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "org", userId: "42" }));
-      await fs.writeFile(path.join(home, "github-cookie.txt"), "user_session=offline-only");
+      await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "air", userId: "42" }));
+      await fs.writeFile(path.join(home, "credentials.txt"), "offline-user:offline-only");
       const at = 1_800_000_000_000;
       await runOnce(home, { now: () => at, checkin: async () => ({ outcome: initial }) });
       await resume(home);
@@ -95,7 +81,7 @@ test("local secrets cannot be initialized in a different Git repository", async 
 });
 
 test("no automatic stale-lock deletion API is exposed", async () => {
-  const module = await import("./local-checkin.mjs");
+  const module = await import("../local-checkin.mjs");
   assert.equal("unlock" in module, false);
 });
 
@@ -103,8 +89,8 @@ test("replacement lock is never deleted by an older owner", async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "ar-lock-owner-"));
   try {
     await initialize(home);
-    await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "org", userId: "42" }));
-    await fs.writeFile(path.join(home, "github-cookie.txt"), "user_session=offline-only");
+    await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "air", userId: "42" }));
+    await fs.writeFile(path.join(home, "credentials.txt"), "offline-user:offline-only");
     const replacement = JSON.stringify({ pid: process.pid, token: "replacement-owner" });
     await assert.rejects(runOnce(home, { checkin: async () => {
       await fs.writeFile(path.join(home, "run.lock"), replacement);
@@ -114,15 +100,15 @@ test("replacement lock is never deleted by an older owner", async () => {
   } finally { await fs.rm(home, { recursive: true, force: true }); }
 });
 
-test("Windows broad cookie ACL is rejected before checkin", { skip: process.platform !== "win32" }, async () => {
+test("Windows broad credential ACL is rejected before checkin", { skip: process.platform !== "win32" }, async () => {
   const { promisify } = await import("node:util");
   const { execFile } = await import("node:child_process");
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "ar-acl-denied-"));
   try {
     await initialize(home);
-    await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "org", userId: "42" }));
-    await fs.writeFile(path.join(home, "github-cookie.txt"), "user_session=offline-only");
-    await promisify(execFile)(path.join(process.env.SystemRoot || "C:/Windows", "System32", "icacls.exe"), [path.join(home, "github-cookie.txt"), "/grant", "*S-1-5-11:R"]);
+    await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "air", userId: "42" }));
+    await fs.writeFile(path.join(home, "credentials.txt"), "offline-user:offline-only");
+    await promisify(execFile)(path.join(process.env.SystemRoot || "C:/Windows", "System32", "icacls.exe"), [path.join(home, "credentials.txt"), "/grant", "*S-1-5-11:R"]);
     let called = false;
     await assert.rejects(runOnce(home, { checkin: async () => { called = true; return { outcome: "claimed" }; } }));
     assert.equal(called, false);
@@ -130,24 +116,20 @@ test("Windows broad cookie ACL is rejected before checkin", { skip: process.plat
 });
 
 test("watch checks locally and performs only due attempts with a simulated clock", async () => {
-  const { watch } = await import("./local-checkin.mjs");
+  const { watch } = await import("../local-checkin.mjs");
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "ar-watch-"));
   const originalFetch = globalThis.fetch;
   const originalNow = Date.now;
   try {
     await initialize(home);
-    await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "org", userId: "42" }));
-    await fs.writeFile(path.join(home, "github-cookie.txt"), "user_session=offline-only");
+    await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "air", userId: "42" }));
+    await fs.writeFile(path.join(home, "credentials.txt"), "offline-user:offline-only");
     let time = 1_800_000_000_000;
     Date.now = () => time;
     let requests = 0;
     globalThis.fetch = async () => {
-      switch (requests++ % 4) {
-        case 0: return Response.json({ success: true, data: { github_oauth: true, github_client_id: "test-client" } });
-        case 1: return Response.json({ success: true, data: "test-state" }, { headers: { "set-cookie": "session=fresh; Secure" } });
-        case 2: return new Response(null, { status: 302, headers: { location: "https://agentrouter.org/oauth/github?code=test-code&state=test-state" } });
-        default: return Response.json({ success: true, data: { id: 42, checked_in: true } });
-      }
+      requests++;
+      return Response.json({ success: true, data: { id: 42, checked_in: true } });
     };
     const stop = new AbortController();
     const events = [];
@@ -158,7 +140,7 @@ test("watch checks locally and performs only due attempts with a simulated clock
       poll: async ms => { assert.equal(ms, 60_000); time += polls++ === 0 ? 60_000 : 86_400_000; },
     });
     assert.deepEqual(events, ["claimed", "skipped", "claimed"]);
-    assert.equal(requests, 8);
+    assert.equal(requests, 2);
   } finally {
     globalThis.fetch = originalFetch;
     Date.now = originalNow;
@@ -175,7 +157,7 @@ test("a parent junction cannot redirect local credential storage into a reposito
     await fs.mkdir(path.join(repository, ".git"));
     await fs.symlink(repository, alias, process.platform === "win32" ? "junction" : "dir");
     await assert.rejects(initialize(path.join(alias, "private")));
-    await assert.rejects(fs.access(path.join(repository, "private", "github-cookie.txt")));
+    await assert.rejects(fs.access(path.join(repository, "private", "credentials.txt")));
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
@@ -192,7 +174,7 @@ test("Linux and Windows reject shared home permissions before network access", a
       await promisify(execFile)(icacls, [home, "/grant", "*S-1-5-32-545:(OI)(CI)R"], { windowsHide: true });
     } else {
       assert.equal((await fs.stat(home)).mode & 0o777, 0o700);
-      for (const file of ["config.json", "github-cookie.txt"]) {
+      for (const file of ["config.json", "credentials.txt"]) {
         assert.equal((await fs.stat(path.join(home, file))).mode & 0o777, 0o600);
       }
       await fs.chmod(home, 0o755);

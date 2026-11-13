@@ -8,10 +8,10 @@ import {fileURLToPath} from "node:url";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 1_800_000_000_000;
-const COOKIE = "user_session=offline-fixture-secret; __Host-user_session_same_site=offline-only";
+const CREDS = "offline-user:offline-fixture-secret";
 const SECRET = "upstream-private-message-offline-fixture";
-const moduleUrl = new URL("./local-checkin.mjs", import.meta.url);
-const repository = dirname(fileURLToPath(import.meta.url));
+const moduleUrl = new URL("../local-checkin.mjs", import.meta.url);
+const repository = dirname(dirname(fileURLToPath(import.meta.url)));
 let initialize, runOnce, resume, status;
 let originalFetch;
 let networkCalls = 0;
@@ -36,8 +36,8 @@ async function fixture(t, configured = true) {
   const home = join(root, "home");
   await initialize(home);
   if (configured) {
-    await writeFile(join(home, "config.json"), JSON.stringify({version: 1, site: "org", userId: "42"}));
-    await writeFile(join(home, "github-cookie.txt"), COOKIE);
+    await writeFile(join(home, "config.json"), JSON.stringify({version: 1, site: "air", userId: "42"}));
+    await writeFile(join(home, "credentials.txt"), CREDS);
   }
   return {root, home};
 }
@@ -48,7 +48,7 @@ async function json(home, name = "state.json") {
 
 function assertSanitized(value) {
   const serialized = value instanceof Error ? value.message : JSON.stringify(value);
-  for (const secret of [COOKIE, SECRET, "offline-fixture-secret", "__Host-user_session_same_site"]) {
+  for (const secret of [CREDS, SECRET, "offline-fixture-secret", "offline-user"]) {
     assert.ok(!String(serialized).includes(secret), "public data must not contain credentials or upstream text");
   }
 }
@@ -100,16 +100,16 @@ async function trySymlink(t, target, path, directory = false) {
 
 test("initialize creates empty private templates and never overwrites existing files", async t => {
   const {home} = await fixture(t, false);
-  assert.deepEqual(await json(home, "config.json"), {version: 1, site: "org", userId: ""});
-  assert.equal(await readFile(join(home, "github-cookie.txt"), "utf8"), "");
+  assert.deepEqual(await json(home, "config.json"), {version: 1, site: "air", userId: ""});
+  assert.equal(await readFile(join(home, "credentials.txt"), "utf8"), "");
   const config = JSON.stringify({version: 1, site: "air", userId: "73"});
   const state = JSON.stringify({keep: "existing-state"});
   await writeFile(join(home, "config.json"), config);
-  await writeFile(join(home, "github-cookie.txt"), COOKIE);
+  await writeFile(join(home, "credentials.txt"), CREDS);
   await writeFile(join(home, "state.json"), state);
   await initialize(home);
   assert.equal(await readFile(join(home, "config.json"), "utf8"), config);
-  assert.equal(await readFile(join(home, "github-cookie.txt"), "utf8"), COOKIE);
+  assert.equal(await readFile(join(home, "credentials.txt"), "utf8"), CREDS);
   assert.equal(await readFile(join(home, "state.json"), "utf8"), state);
 });
 
@@ -123,9 +123,9 @@ test("initialize refuses a home inside the repository before creating it", async
 test("empty initialization and missing credentials never call checkin", async t => {
   const {home} = await fixture(t, false);
   await assertClosed(home);
-  await writeFile(join(home, "config.json"), JSON.stringify({version: 1, site: "org", userId: "42"}));
+  await writeFile(join(home, "config.json"), JSON.stringify({version: 1, site: "air", userId: "42"}));
   await assertClosed(home);
-  await writeFile(join(home, "github-cookie.txt"), "  \n\t");
+  await writeFile(join(home, "credentials.txt"), "  \n\t");
   await assertClosed(home);
 });
 
@@ -138,13 +138,13 @@ for (const [label, patch] of [
 ]) {
   test("invalid configuration fails closed: " + label, async t => {
     const {home} = await fixture(t);
-    await writeFile(join(home, "config.json"), JSON.stringify({version: 1, site: "org", userId: "42", ...patch}));
+    await writeFile(join(home, "config.json"), JSON.stringify({version: 1, site: "air", userId: "42", ...patch}));
     await assertClosed(home);
     await assertAbsent(join(home, "run.lock"));
   });
 }
 
-for (const name of ["config.json", "github-cookie.txt"]) {
+for (const name of ["config.json", "credentials.txt"]) {
   test("missing " + name + " fails closed", async t => {
     const {home} = await fixture(t);
     await rm(join(home, name));
@@ -158,7 +158,7 @@ test("malformed configuration fails closed", async t => {
   await assertClosed(home);
 });
 
-for (const site of ["org", "air"]) {
+for (const site of ["air"]) {
   for (const outcome of ["claimed", "done"]) {
     test(site + ": " + outcome + " persists an attempt before callback and exposes no grant message", async t => {
       const {home} = await fixture(t);
@@ -166,14 +166,14 @@ for (const site of ["org", "air"]) {
       let calls = 0;
       const result = await runOnce(home, {now: () => NOW, checkin: async auth => {
         calls++;
-        assert.deepEqual(auth, {type: "api", metadata: {site, userId: "42", githubCookie: COOKIE}});
+        assert.deepEqual(auth, {type: "api", metadata: {site, userId: "42", username: "offline-user", password: "offline-fixture-secret"}});
         const state = await json(home);
         assert.equal(state.version, 1);
         assert.equal(state.identity, site + ":42");
         assert.equal(state.lastAttemptAt, NOW);
         assert.equal(state.nextAttemptAt, NOW + DAY);
         assert.ok((await lstat(join(home, "run.lock"))).isFile());
-        return {outcome, message: "Granted 999 credits " + SECRET + " " + COOKIE};
+        return {outcome, message: "Granted 999 credits " + SECRET + " " + CREDS};
       }});
       assert.equal(calls, 1);
       assertResult(result, outcome);
@@ -216,8 +216,8 @@ for (const kind of ["failed", "ineligible", "unknown", "throw"]) {
     let calls = 0;
     const checkin = async () => {
       calls++;
-      if (kind === "throw") throw new Error(SECRET + " " + COOKIE);
-      return {outcome: kind, message: SECRET + " " + COOKIE};
+      if (kind === "throw") throw new Error(SECRET + " " + CREDS);
+      return {outcome: kind, message: SECRET + " " + CREDS};
     };
     const outcome = kind === "ineligible" ? "ineligible" : "failed";
     assertResult(await runOnce(home, {now: () => NOW, checkin}), outcome);
@@ -246,7 +246,7 @@ for (const kind of ["failed", "ineligible", "unknown", "throw"]) {
 for (const [label, response] of [
   ["undefined", undefined], ["null", null], ["empty object", {}],
   ["boolean true", true], ["string true outcome", {outcome: "true"}],
-  ["private unknown outcome", {outcome: SECRET, message: COOKIE}],
+  ["private unknown outcome", {outcome: SECRET, message: CREDS}],
 ]) {
   test("unknown callback response pauses without leaking: " + label, async t => {
     const {home} = await fixture(t);
@@ -263,7 +263,7 @@ for (const [label, response] of [
   });
 }
 
-const validState = {version: 1, identity: "org:42", nextAttemptAt: NOW - 1, lastAttemptAt: NOW - DAY - 1, paused: false, lastOutcome: "claimed"};
+const validState = {version: 1, identity: "air:42", nextAttemptAt: NOW - 1, lastAttemptAt: NOW - DAY - 1, paused: false, lastOutcome: "claimed"};
 for (const [label, content] of [
   ["invalid JSON", "{" + SECRET], ["null", "null"], ["array", "[]"], ["empty", "{}"],
   ["wrong version", JSON.stringify({...validState, version: 2})],
@@ -287,9 +287,9 @@ test("status reports only sanitized readiness and gate fields", async t => {
   const unconfigured = await status(home);
   assert.equal(unconfigured.configured, false);
   assert.ok(Object.keys(unconfigured).every(key => ["configured", "paused", "nextAttemptAt", "lastOutcome"].includes(key)));
-  await writeFile(join(home, "config.json"), JSON.stringify({version: 1, site: "org", userId: "42"}));
-  await writeFile(join(home, "github-cookie.txt"), COOKIE);
-  await runOnce(home, {now: () => NOW, checkin: async () => ({outcome: "failed", message: SECRET + COOKIE})});
+  await writeFile(join(home, "config.json"), JSON.stringify({version: 1, site: "air", userId: "42"}));
+  await writeFile(join(home, "credentials.txt"), CREDS);
+  await runOnce(home, {now: () => NOW, checkin: async () => ({outcome: "failed", message: SECRET + CREDS})});
   const value = await status(home);
   assert.deepEqual(Object.keys(value).sort(), ["configured", "lastOutcome", "nextAttemptAt", "paused"]);
   assert.deepEqual(value, {configured: true, paused: true, nextAttemptAt: NOW + DAY, lastOutcome: "failed"});
@@ -337,10 +337,10 @@ test("home symlinks are rejected by initialize and runOnce", async t => {
   if (!await trySymlink(t, home, alias, true)) return;
   await assert.rejects(async () => initialize(alias));
   await assertClosed(alias);
-  assert.equal(await readFile(join(home, "github-cookie.txt"), "utf8"), COOKIE);
+  assert.equal(await readFile(join(home, "credentials.txt"), "utf8"), CREDS);
 });
 
-for (const name of ["config.json", "github-cookie.txt"]) {
+for (const name of ["config.json", "credentials.txt"]) {
   test(name + " symlinks are rejected without touching their targets", async t => {
     const {root, home} = await fixture(t);
     const path = join(home, name);

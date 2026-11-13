@@ -61,7 +61,7 @@ async function windowsPermissions(home, initialize) {
     const currentTrustee = currentWindowsTrustee(probe);
     if (!currentTrustee) fail("UNSAFE_WINDOWS_PERMISSIONS");
     const targets = [home];
-    for (const name of ["config.json", "github-cookie.txt", "state.json"]) {
+    for (const name of ["config.json", "credentials.txt", "state.json"]) {
       const file = path.join(home, name);
       try { await fs.lstat(file); targets.push(file); }
       catch (error) { if (error.code !== "ENOENT") throw error; }
@@ -111,7 +111,7 @@ function parseJSON(text, code) {
 
 async function configuration(home) {
   const config = parseJSON(await readLocal(path.join(home, "config.json")), "INVALID_CONFIG");
-  if (!config || config.version !== 1 || !["org", "air"].includes(config.site)
+  if (!config || config.version !== 1 || config.site !== "air"
       || typeof config.userId !== "string" || !/^[1-9][0-9]*$/.test(config.userId)
       || Object.keys(config).some(k => !["version", "site", "userId"].includes(k))) fail("INVALID_CONFIG");
   return config;
@@ -119,9 +119,13 @@ async function configuration(home) {
 
 async function credentials(home) {
   const config = await configuration(home);
-  const cookie = (await readLocal(path.join(home, "github-cookie.txt"))).trim();
-  if (!cookie) fail("NOT_CONFIGURED");
-  return { type: "api", metadata: { site: config.site, userId: config.userId, githubCookie: cookie } };
+  // One "username:password" line; the password keeps any further colons.
+  const text = (await readLocal(path.join(home, "credentials.txt"))).trim();
+  const at = text.indexOf(":");
+  const username = at > 0 ? text.slice(0, at).trim() : "";
+  const password = at > 0 ? text.slice(at + 1) : "";
+  if (!username || !password) fail("NOT_CONFIGURED");
+  return { type: "api", metadata: { site: config.site, userId: config.userId, username, password } };
 }
 
 async function readState(home) {
@@ -165,7 +169,7 @@ async function locked(home, action) {
 
 export async function initialize(home = defaultHome()) {
   home = await homePath(home, true);
-  for (const [name, text] of [["config.json", JSON.stringify({ version: 1, site: "org", userId: "" }, null, 2) + "\n"], ["github-cookie.txt", ""]]) {
+  for (const [name, text] of [["config.json", JSON.stringify({ version: 1, site: "air", userId: "" }, null, 2) + "\n"], ["credentials.txt", ""]]) {
     try { await fs.writeFile(path.join(home, name), text, { flag: "wx", mode: 0o600 }); }
     catch (error) { if (error.code !== "EEXIST") throw error; await readLocal(path.join(home, name)); }
   }
@@ -237,9 +241,10 @@ export async function watch(home = defaultHome(), { signal, report = r => consol
 
 const HELP =   "Local HTTP only. No browser automation or browser-session extraction.\n" +
   "Usage: node local-checkin.mjs <init|status|run|watch|resume> [--home ABSOLUTE_DIRECTORY]\n" +
+  "After init, fill config.json (site, userId) and credentials.txt (one username:password line).\n" +
   "run/watch: at most one attempt per 24h; failure pauses until explicit resume.\n" +
   "resume: after manual recovery only; keeps the 24h cooldown and makes no request.\n" +
-  "Never pass a Cookie on the command line or in chat. Data stays in your local user directory.";
+  "Never pass a password on the command line or in chat. Data stays in your local user directory.";
 
 async function main(argv) {
   const [command = "help", ...rest] = argv;

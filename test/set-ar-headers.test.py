@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 class HeaderOutputPrivacyTests(unittest.TestCase):
     def run_update(self, headers):
-        script = Path(__file__).with_name("set-ar-headers.sh").read_text(encoding="utf-8")
+        script = (Path(__file__).resolve().parent.parent / "set-ar-headers.sh").read_text(encoding="utf-8")
         payload = script.split("python3 -c '\n", 1)[1].split("\n' ", 1)[0]
         with tempfile.TemporaryDirectory() as directory:
             auth = Path(directory) / "plugin-auth.json"

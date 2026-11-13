@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { explainResponse } from './response.mjs';
+import { explainResponse } from '../response.mjs';
 
 test("approved server_error code mapping is HTTP 500", async () => {
   const response = new Response(JSON.stringify({ error: { code: "server_error", message: "Synthetic server failure" } }), { headers: { "content-type": "application/json" } });

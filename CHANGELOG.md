@@ -1,59 +1,26 @@
 # 版本记录
 
-[使用说明](<README.md>) · [优化设计与兼容边界](<docs/OPTIMIZATION.md>)
+[使用说明](<README.md>) · [优化设计与兼容边界](<docs/OPTIMIZATION.md>) · [出处与致谢](<#出处与致谢>)
 
-本页记录源码行为，当前版本为 **0.1.8**。npm 可用版本以官方 registry 查询为准；文档和源码更新不代表远程网关升级或模型验证成功。
+本页记录本独立插件的源码行为，当前版本为 **0.1.9**。本插件未发布到 npm registry；文档和源码更新不代表远程网关升级或模型验证成功。
 
-## 0.1.8 — 2026-11-10
+## 0.1.9 — 2026-11-13
 
-- 新增第三种登录方式「系统访问令牌（读取已有 Key）」：站点 + 系统访问令牌 + 用户 ID + 可选模型 Key ID，只读取账号已有 Key，不请求 OAuth 授权接口，也不创建、轮换或修改任何 Key。
-- 多把启用 Key 时要求用户按站点「令牌」页 ID 列的 Key ID 指定一把，经 `GET /api/token/{id}` 只读读取；唯一启用且完整的 Key 时直接使用，其余分类沿用既有失败文案。Key ID 是该站点对用户可见的数字列，不是隐藏字段。
-- 模型 Key ID 在表单、授权入口和请求函数中统一校验；非法值在发出请求前拒绝，留空与合法数字 ID 的行为保持不变。
-- 移除 0.1.7 的 LinuxDo OAuth 登录入口，含其常量、`/api/status` 的 `linuxdo_client_id` 读取与死代码 `codeOf`。真实验证结论：授权回落到站点注册路由 `https://agentrouter.org/oauth/linuxdo`（非 `/oauth/linuxdo/magpie`），站点前端在该路由自行请求 `/api/oauth/linuxdo`（真实验证记录 1 次、HTTP 403）并跳走，地址栏不保留 code/state，插件侧手动回填在任何兑换请求前即被拒绝；公开资料无 redirect_uri 匹配规则，站点前端确认该路由精确匹配且无可抑制自动兑换的标志位。
-- GitHub 登录链路与提问形状不变；`/api/oauth/*` 仅由 GitHub 授权链路调用。PR 作者报告真实账号复测：2 次 `/api/token`、0 次 `/api/oauth`，唯一 Key 与按 Key ID 两条路径均成功且返回 Key 与账号已存 Key 一致。发布验证与限制见优化文档。
+- 登录仅保留**账号密码**一种入口，账号与密码由用户手动输入后保存；移除 API Key、GitHub 授权、系统访问令牌入口与站点选择。登录以 `POST /api/user/login` 完成，用返回会话只读查找账号已有模型 Key 并保存。
+- 所有请求固定发往 `https://ps.air-outer.com`；移除国际站 `agentrouter.org` 与 org/air 站点切换。
+- 签到 hook 与本地签到工具改为账号密码登录；移除 GitHub Cookie 自动签到与全部 GitHub OAuth 代码。本地工具凭据文件改为 `credentials.txt`（一行 `用户名:密码`），ACL 安全机制不变。
+- 登录/余额错误不再回显站点响应正文，避免凭据经错误信息泄漏。
+- 移除源码中写死的账号与密码：登录表单不再预填任何凭据，账号密码必须由用户手动输入，成功后保存到账号 metadata；未保存凭据时登录、签到与余额的密码回落均在本地拒绝，不发起请求。
+- 仓库整理：全部回归测试统一移至 `test/` 目录，`npm test` 与 `npm run test:headers` 同步更新。
+- 死代码清理：删除无引用的 `github-cookie.mjs` 与 `CHECKIN_TIMEOUT` 常量，合并重复注释块；文档移除已失效的 0.1.8 及以下上游历史章节与版本标注。
+- 作为独立插件维护：解除对上游仓库的 git 追踪，仓库地址与安全报告渠道改为本仓库；保留 MIT 许可与原作者版权声明，并在 README 与本页补充[出处与致谢](<#出处与致谢>)。
+- 移除全部 GitHub 自动化：删除 `.github/` 目录（CI、CodeQL、PR 审查工作流、PR 策略脚本、dependabot、Issue/PR 模板、CODEOWNERS）及仅服务于 CI 的 `test/pr-policy.test.cjs`、`test/windows-test-temp.ps1`，同时移除 `npm run test:policy`。验证改为完全由维护者本地执行。
 
-## 0.1.7 — 2026-11-10
+## 出处与致谢
 
-- 新增国际站 `agentrouter.org` / 国内站 `ps.air-outer.com` 选择，登录顺序为 API Key、GitHub、LinuxDo。API Key 保留宿主原生单密钥输入；GitHub / LinuxDo 选择站点后填写系统访问令牌，使用浏览器授权及完整手动回调查找已有模型 key。
-- 新国内站授权显式保存 `metadata.apiBase`，模型请求和模型列表使用所选站点。旧账号的 key、site、显式 endpoint / apiBase 保留，不将旧 `site: air` 自动迁移为国内模型端点。
-- OAuth 兑换实际发送 state 接口下发的站点 session；两种提供商独立校验各自 client ID。LinuxDo 使用 `/oauth/linuxdo/magpie` 回调，保存提供商标识；未新增 LinuxDo Cookie 自动登录或签到续期机制。
-- LinuxDo 回调流程的合成回归通过，但未进行真实账号 OAuth 实测；回调被拒绝或无法完成时可使用 API Key 接入。此次本地验证覆盖 297 项 Node.js、13 项 policy、2 项 Python，另有 38 项独立合成回归；这些结果不代表线上授权或模型调用已验证。
-- npm 安装示例与登录、端点兼容、升级回退文档同步到 0.1.7。相关变更见 PR #9、Issue #10。
+本插件基于 **ZhaoJun233** 的 [agentrouter-magpie-plugin](https://github.com/ZhaoJun233/agentrouter-magpie-plugin) 二次开发，现由 [nijiong](https://github.com/nijiong/agentrouter-magpie-plugin) 独立维护，不再跟随上游更新。
 
-- 修复 Windows 内置 Administrator 在 CI 中被 `icacls` 记作 `LA`、导致安全目录被误拒绝的问题：使用当前完整 SID 的原生 ACL 往返结果识别身份，保留共享权限拒绝策略和 Linux 权限检查；补充跨平台权限与域 SID 反例测试。
+- **原作者 ZhaoJun233** —— 感谢其奠定了插件的整体架构与核心能力：有界响应诊断、增量 SSE 前导观察、assistant 历史与不透明状态的无损保留、本地文字过滤，以及本地签到工具的 ACL 安全机制。这些设计构成本插件的基础。
+- **参考项目 [AgentRouter-Codex-Filter](https://github.com/alexcarterio/AgentRouter-Codex-Filter)**（MIT，作者 alexcarterio）—— 上游作者参考了其保守错误诊断思路。本插件延续该取舍：不移植独立代理、仪表盘、遥测、自动重试或有损历史降级。
 
-- 修复 Issue #2：完整 assistant 历史内联后保留 `output_text` 及其空 `annotations` / `logprobs`，避免误转 `input_text` 导致上游 400；其他角色、工具调用和认证行为保持不变。
-- 采用 PR #3 的角色区分修复，但不引入其 reasoning 状态裁剪：推理 ID、加密内容、仅引用和未知字段继续保留。补充角色、资源切换、安装后 loader 与无损状态回归；合成测试不代表真实上游验证。
-
-## 0.1.6 — 2026-11-06
-
-- 登录顺序保持 API Key 在前、GitHub 在后。API Key 无插件问题，只用宿主原生单输入；保存不代表验证。当前宿主 API `authorize` 不接收原生 key，因此不添加保存前验证、第二个 key 字段、verified 标记或状态徽章。
-- GitHub 仅预先询问系统访问令牌（遮蔽输入），随后由用户浏览器授权、回填完整回调 URL，再查找已有模型 key。管理令牌不是模型 key；不是免令牌或全自动 OAuth。
-- 首次登录移除端点、站点、请求头、用户 ID、用户名密码及 Cookie 问题。新账号默认 `agentrouter.org`；升级保留旧账号 key、site 和其他既有设置，不做自动迁移。
-- 已有 key 查找兼容已知 `data.items` / `data` 数组形状；候选须启用（`status=1`）、非空、未掩码、未过期，按 key 去重后必须唯一。多个候选、无候选、未知响应或分页截断不确定时要求手动 API Key 恢复，不自动创建、轮换、重试，也不以空 key 完成 OAuth。
-- loader 对缺失 key 或保留占位 key 在网络前返回本地 `400 agentrouter_missing_api_key`。
-- 文档移除旧首次登录问题清单，区分保存、模型测试、账号余额与签到；宿主“已登录”不代表模型已验证。高级 metadata 仍可通过既有手动配置维护；插件选项仅支持布尔开关，没有新增 Cookie 设置页。
-- npm 安装说明固定到 0.1.6，要求先查询官方 registry 并核对宿主实际加载版本；继续原本地目录注册的用户不要重复添加 npm 插件。本地原生回归 278 项 Node.js、2 项 Python 通过；离线验证不代表真实授权或模型已验证。
-- 不改变限流、Responses 兼容、过滤或签到运行逻辑；独立 [本地签到工具](<LOCAL-CHECKIN.md>) 保持不变，不自动启用。
-
-## 0.1.5 — 已发布
-
-- 新增内部共享有界读取器：请求保持 **4 MiB / 2 秒**，JSON 响应诊断限制为 **64 KiB / 2 秒**。检查副本，不消费原正文；无法可靠读取或解析时放弃改写。
-- 在明确错误封套内新增有限的数字状态、错误码与繁忙短语分类；每层验证错误叶子，只继承合法数字状态，深度预算耗尽时透传。认证、权限、余额、配额及内容策略等业务原因优先，不误包装成暂时性故障。
-- 保留既有 token 限流、内容拒绝、跨资源历史和空完成专用类型；保留上游错误代码/消息、等待头和请求标识。新增分类不自行设置通用等待时间，也不添加重试。
-- SSE 保持 **64 KiB / 15 秒** 前导边界，改为增量分行；兼容混合换行、跨块 UTF-8、多行 data 和重复 event 最后值。遇有效内容或未知事件/形状即停止诊断，保留原始字节、取消、背压及在途读取。
-- 独立文本过滤支持普通 `output_text.logprobs: []`，无论历史内联是否开启；关闭内联时只替换文本，不删 ID、类型或元数据。非空/未知概率数据、真实注释、工具及不透明状态继续保留。
-- 修复重复过滤时可能跨越已有过滤标记或吞掉代码结构分隔符的问题，保留下一非空行缩进；加强 Markdown 边界与幂等性回归。
-- 选项、默认值、公开根入口、登录配置与依赖不变。本地原生验证为 **255 项 Node.js + 2 项 Python** 通过，并获独立范围复核接受；不构成线上恢复保证。
-
-参考 MIT 项目 [AgentRouter-Codex-Filter](<https://github.com/alexcarterio/AgentRouter-Codex-Filter>) 的离线 V12.2 源码 ZIP 所体现的保守诊断思路，**独立实现插件行为**；未核验远端提交，不移植其独立代理、仪表盘、遥测、多层自动重试或有损历史清理。详细取舍见 [优化说明](<docs/OPTIMIZATION.md>)。
-
-## 0.1.4
-
-以下登录问答为历史行为，已由 0.1.6 的简化流程替代；不是当前版本的操作步骤。
-
-- GitHub 登录先选择站点，系统访问令牌使用遮蔽输入；签到续期默认跳过，仅主动配置时显示 GitHub Cookie 获取说明与本地格式校验。格式通过不代表线上有效，普通登录无需配置签到续期。
-- 修复完整普通历史消息带空 `logprobs: []` 时未能参与内联重放的问题；保留工具关联、非空或未知概率数据、引用注释、推理/加密及其他不透明状态。
-- 明确历史兼容边界：仅对已有完整内联内容的适用条目去除资源本地 ID，不恢复仅存在于其他上游资源的历史或加密状态，不把这一补充描述为跨资源问题的通用解法。
-
-0.1.4 的空概率数组修复针对**历史内联**；0.1.5 进一步补齐**独立文字过滤**路径，两者不是同一项改动。
+原始版权归 ZhaoJun233 所有，依 [MIT 许可](<LICENSE>)保留其版权与许可声明。本定制版的修改部分同样以 MIT 许可发布。感谢上游社区在 magpie / OpenCode 生态中的公开实践与讨论。

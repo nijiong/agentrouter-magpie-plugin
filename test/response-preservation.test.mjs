@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { explainResponse } from "./response.mjs";
+import { explainResponse } from "../response.mjs";
 
 const busy = "We are currently experiencing high demand";
 const success = [{ type: "message", content: [{ type: "output_text", text: "success" }] }];

@@ -1,27 +1,26 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { AgentRouterAuthPlugin, _internal } from './index.mjs';
+import { AgentRouterAuthPlugin, _internal } from '../index.mjs';
 
 const plugin = await AgentRouterAuthPlugin();
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
 
 const apiMethod = (p) => p.auth.methods.find((m) => m.type === 'api');
 
-test('GitHub login requires a system access token before requesting authorization', async () => {
-  const method = plugin.auth.methods.find((m) => m.type === 'oauth');
-  const result = await method.authorize({ site: 'org', accessToken: '  ' });
+test('password sign-in requires credentials and offers no other method', async () => {
+  assert.deepEqual(plugin.auth.methods.map((m) => m.type), ['api']);
+  const method = plugin.auth.methods[0];
+  const result = await method.authorize({ username: '  ', password: '' });
   assert.equal(result.type, 'failed');
-  assert.match(result.error, /系统访问令牌/);
+  assert.match(result.error, /账号和密码/);
 });
 
-test('GitHub login saves the entered token and never regenerates it', async () => {
-  const method = plugin.auth.methods.find((m) => m.type === 'oauth');
+test('password sign-in saves the login session and reads the existing key', async () => {
+  const method = plugin.auth.methods[0];
   const original = globalThis.fetch;
   const calls = [];
   const responses = [
-    json({ success: true, data: 'oauth-state' }),
-    json({ data: { github_client_id: 'example', server_address: 'https://agentrouter.org' } }),
-    new Response(JSON.stringify({ success: true, data: { id: 123, access_token: 'site-token' } }), {
+    new Response(JSON.stringify({ success: true, data: { id: 123, checked_in: true } }), {
       headers: { 'Set-Cookie': 'session=example; Path=/; HttpOnly' },
     }),
     json({ success: true, data: { items: [{ status: 1, key: 'sk-example' }] } }),
@@ -32,14 +31,16 @@ test('GitHub login saves the entered token and never regenerates it', async () =
     return responses.shift();
   };
   try {
-    const authorization = await method.authorize({ site: 'org', accessToken: '  entered-token  ' });
-    const result = await authorization.callback('https://agentrouter.org/oauth/github/magpie?code=examplecode&state=oauth-state');
+    const result = await method.authorize({ username: '  site-user  ', password: 'site-pass' });
     assert.equal(result.type, 'success');
-    assert.equal(result.metadata.accessToken, 'entered-token');
+    assert.equal(result.metadata.username, 'site-user');
+    assert.equal(result.metadata.password, 'site-pass');
     assert.equal(result.metadata.cookie, 'session=example');
     assert.equal(result.metadata.userId, '123');
     assert.equal(result.key, 'sk-example');
-    assert.equal(calls.at(-1).headers.Authorization, 'entered-token');
+    assert.equal(calls[0].url, 'https://ps.air-outer.com/api/user/login');
+    assert.equal(new Headers(calls[1].headers).get('Cookie'), 'session=example');
+    assert.equal(new Headers(calls[1].headers).get('New-Api-User'), '123');
     assert.ok(calls.every((call) => !call.url.includes('/api/user/token')));
   } finally {
     globalThis.fetch = original;
@@ -47,13 +48,13 @@ test('GitHub login saves the entered token and never regenerates it', async () =
 });
 
 test('Endpoint onboarding is absent and a previously misplaced key stays ignored', async () => {
-  assert.deepEqual(apiMethod(plugin).prompts.map(p => p.key), ["site"]);
+  assert.deepEqual(apiMethod(plugin).prompts.map(p => p.key), ["username", "password", "modelKeyId"]);
 
   const { calls } = await readUsage(
-    { key: 'sk-example', metadata: { endpoint: 'sk-example' } },
-    [json({ total_usage: 0 })],
+    { key: 'sk-example', metadata: { endpoint: 'sk-example', username: 'example', password: 'example' } },
+    [json({ success: false, message: 'refused' }), json({ total_usage: 0 })],
   );
-  assert.equal(calls[0].url, 'https://agentrouter.org/v1/dashboard/billing/usage');
+  assert.equal(calls[1].url, 'https://ps.air-outer.com/v1/dashboard/billing/usage');
 });
 
 test('The Codex headers are sent unless the provider switch is turned off', async () => {
@@ -126,7 +127,7 @@ test('A content-filter refusal is explained, not left looking like a rate limit'
   try {
     const p = await AgentRouterAuthPlugin();
     const loader = await p.auth.loader(async () => ({ key: 'sk-example' }), {});
-    const res = await loader.fetch('https://agentrouter.org/v1/responses', {
+    const res = await loader.fetch('https://ps.air-outer.com/v1/responses', {
       method: 'POST',
       body: '{}',
     });
@@ -165,7 +166,7 @@ test('A token-rate-limit 429 says it is a rate cap with a wait, not a spent acco
   try {
     const p = await AgentRouterAuthPlugin();
     const loader = await p.auth.loader(async () => ({ key: 'sk-example' }), {});
-    const res = await loader.fetch('https://agentrouter.org/v1/responses', {
+    const res = await loader.fetch('https://ps.air-outer.com/v1/responses', {
       method: 'POST',
       body: '{}',
     });
@@ -190,7 +191,7 @@ test('A 429 that is not this cap is passed through untouched', async () => {
   try {
     const p = await AgentRouterAuthPlugin();
     const loader = await p.auth.loader(async () => ({ key: 'sk-example' }), {});
-    const res = await loader.fetch('https://agentrouter.org/v1/responses', {
+    const res = await loader.fetch('https://ps.air-outer.com/v1/responses', {
       method: 'POST',
       body: '{}',
     });
@@ -210,7 +211,7 @@ test('Any other refusal is passed through untouched', async () => {
   try {
     const p = await AgentRouterAuthPlugin();
     const loader = await p.auth.loader(async () => ({ key: 'sk-example' }), {});
-    const res = await loader.fetch('https://agentrouter.org/v1/responses', {
+    const res = await loader.fetch('https://ps.air-outer.com/v1/responses', {
       method: 'POST',
       body: '{}',
     });
@@ -252,10 +253,10 @@ test('Cookie-only account reads remaining balance and real consumption', async (
 
 test('WAF-blocked balance falls back to account consumption without inventing remaining quota', async () => {
   const { usage, calls } = await readUsage(
-    { key: 'sk-example', metadata: { cookie: 'session=example', userId: '123' } },
-    [new Response('<!doctype html><html>captcha</html>'), json({ success: true, data: { quota: 4500000 } })],
+    { key: 'sk-example', metadata: { cookie: 'session=example', userId: '123', username: 'example', password: 'example' } },
+    [new Response('<!doctype html><html>captcha</html>'), json({ success: false, message: 'refused' }), json({ success: true, data: { quota: 4500000 } })],
   );
-  assert.ok(calls[1].url.endsWith('/api/log/self/stat'));
+  assert.ok(calls[2].url.endsWith('/api/log/self/stat'));
   assert.match(usage.error, /累计消耗 \$9\.00/);
   assert.match(usage.error, /剩余额度未知/);
   assert.equal(usage.balance, undefined);
@@ -264,21 +265,33 @@ test('WAF-blocked balance falls back to account consumption without inventing re
 
 test('Missing quota fields are not zero balance; key usage is converted from cents', async () => {
   const { usage, calls } = await readUsage(
-    { key: 'sk-example', metadata: { accessToken: 'example', userId: '123', endpoint: 'https://relay.example' } },
-    [json({ success: true, data: {} }), json({ success: false }), json({ total_usage: 12345.67 })],
+    { key: 'sk-example', metadata: { accessToken: 'example', userId: '123', endpoint: 'https://relay.example', username: 'example', password: 'example' } },
+    [json({ success: true, data: {} }), json({ success: false, message: 'refused' }), json({ success: false }), json({ total_usage: 12345.67 })],
   );
-  assert.equal(calls[2].url, 'https://relay.example/v1/dashboard/billing/usage');
-  assert.equal(calls[2].headers.Authorization, 'Bearer sk-example');
+  assert.equal(calls[3].url, 'https://relay.example/v1/dashboard/billing/usage');
+  assert.equal(calls[3].headers.Authorization, 'Bearer sk-example');
   assert.match(usage.error, /累计消耗 \$123\.46/);
   assert.equal(usage.balance, undefined);
 });
 
-test('Key-only account can report zero consumption without claiming zero balance', async () => {
-  const { usage, calls } = await readUsage({ key: 'sk-example' }, [json({ total_usage: 0 })]);
-  assert.equal(calls.length, 1);
+test('Saved account password can report zero consumption without claiming zero balance', async () => {
+  const { usage, calls } = await readUsage(
+    { key: 'sk-example', metadata: { username: 'example', password: 'example' } },
+    [json({ success: false, message: 'refused' }), json({ total_usage: 0 })],
+  );
+  assert.equal(calls.length, 2);
+  assert.ok(calls[0].url.endsWith('/api/user/login'));
   assert.match(usage.error, /累计消耗 \$0\.00/);
   assert.equal(usage.balance, undefined);
   assert.deepEqual(usage.windows, []);
+});
+
+test('A key without saved credentials reads consumption without attempting a login', async () => {
+  const { usage, calls } = await readUsage({ key: 'sk-example' }, [json({ total_usage: 0 })]);
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].url.endsWith('/v1/dashboard/billing/usage'));
+  assert.match(usage.error, /累计消耗 \$0\.00/);
+  assert.equal(usage.balance, undefined);
 });
 
 test('Successful login without quota does not crash or invent balance', async () => {
@@ -303,7 +316,7 @@ test('Password login supplies balance when user read is blocked', async () => {
 test('Malformed account and billing amounts stay unknown', async () => {
   const { usage } = await readUsage(
     { key: 'sk-example', metadata: { cookie: 'session=example', userId: '123' } },
-    [json({ success: true, data: { quota: null, used_quota: 1 } }), json({ data: { quota: null } }), json({ total_usage: -1 })],
+    [json({ success: true, data: { quota: null, used_quota: 1 } }), json({ success: true, data: {} }), json({ data: { quota: null } }), json({ total_usage: -1 })],
   );
   assert.match(usage.error, /没有返回额度字段/);
   assert.equal(usage.balance, undefined);
