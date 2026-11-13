@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import plugin from "../index.mjs";
+import plugin from "../src/index.mjs";
 
 const raw = (body, headers = {}) => new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json", ...headers } });
 // Magpie's failed() adapter consumes error, not message.

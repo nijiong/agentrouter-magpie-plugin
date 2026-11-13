@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readCloneText } from "../body-inspection.mjs";
+import { readCloneText } from "../src/body-inspection.mjs";
 
 const enc = new TextEncoder();
 const options = { maxBytes: 64 * 1024, timeoutMs: 2000 };

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import plugin from "../index.mjs";
+import plugin from "../src/index.mjs";
 
 const url = "https://ps.air-outer.com/v1/responses";
 const history = () => ({ model: "model", store: true, stream: true, input: [
@@ -115,14 +115,14 @@ test("explicit non-JSON content type leaves even JSON-looking data alone", async
   const seen = await capture(t, url, { method: "POST", body, headers: { "content-type": "text/plain" } }); assert.equal(seen.init.body, body);
 });
 test("oversized Request clones stop without consuming the original", async t => {
-  const { prepareResponsesRequest } = await import("../request.mjs");
+  const { prepareResponsesRequest } = await import("../src/request.mjs");
   const body = JSON.stringify({ ...history(), extra: "x".repeat(4 * 1024 * 1024) });
   const req = new Request(url, { method: "POST", body, headers: { "content-type": "application/json" } });
   const init = {}; assert.equal(await prepareResponsesRequest(req, init), init);
   assert.equal(await req.text(), body);
 });
 test("a stalled clone respects the preparation deadline", { timeout: 7000 }, async t => {
-  const { prepareResponsesRequest } = await import("../request.mjs");
+  const { prepareResponsesRequest } = await import("../src/request.mjs");
   const req = new Request(url, { method: "POST", body: new ReadableStream({ start() {} }), duplex: "half" });
   t.after(() => { void req.body.cancel().catch(() => {}); });
   const init = {}; assert.equal(await prepareResponsesRequest(req, init), init);

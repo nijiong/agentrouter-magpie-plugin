@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { AgentRouterAuthPlugin } from '../index.mjs';
+import { AgentRouterAuthPlugin } from '../src/index.mjs';
 
 const encoder = new TextEncoder();
 const message = 'Your requests to gpt-6-astra for gpt-6-astra in example-region have exceeded token rate limit.';

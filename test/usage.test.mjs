@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { AgentRouterAuthPlugin, _internal } from '../index.mjs';
+import { AgentRouterAuthPlugin, _internal } from '../src/index.mjs';
 
 const plugin = await AgentRouterAuthPlugin();
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status });

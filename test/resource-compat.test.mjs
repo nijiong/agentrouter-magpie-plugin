@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { prepareRequest, prepareResponsesRequest } from "../request.mjs";
+import { prepareRequest, prepareResponsesRequest } from "../src/request.mjs";
 
 const url = "https://example.test/v1/responses";
 // Mirrors the gateway's completed output_text part, with no probability data.

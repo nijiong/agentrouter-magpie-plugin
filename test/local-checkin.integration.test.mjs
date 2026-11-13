@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { initialize, runOnce, status } from "../local-checkin.mjs";
+import { initialize, runOnce, status } from "../src/local-checkin.mjs";
 
 for (const scenario of [
   { name: "server confirms a new reward", marker: true, outcome: "claimed", paused: false },
@@ -54,7 +54,7 @@ for (const scenario of [
 
 for (const initial of ["claimed", "failed"]) {
   test("resume preserves 24h gate after " + initial, async () => {
-    const { resume } = await import("../local-checkin.mjs");
+    const { resume } = await import("../src/local-checkin.mjs");
     const home = await fs.mkdtemp(path.join(os.tmpdir(), "ar-local-recovery-"));
     try {
       await initialize(home);
@@ -81,7 +81,7 @@ test("local secrets cannot be initialized in a different Git repository", async 
 });
 
 test("no automatic stale-lock deletion API is exposed", async () => {
-  const module = await import("../local-checkin.mjs");
+  const module = await import("../src/local-checkin.mjs");
   assert.equal("unlock" in module, false);
 });
 
@@ -116,7 +116,7 @@ test("Windows broad credential ACL is rejected before checkin", { skip: process.
 });
 
 test("watch checks locally and performs only due attempts with a simulated clock", async () => {
-  const { watch } = await import("../local-checkin.mjs");
+  const { watch } = await import("../src/local-checkin.mjs");
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "ar-watch-"));
   const originalFetch = globalThis.fetch;
   const originalNow = Date.now;

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import plugin from "../index.mjs";
+import plugin from "../src/index.mjs";
 
 const url = "https://example.test/v1/responses";
 const auth = { type: "api", key: "synthetic-model-key", metadata: {

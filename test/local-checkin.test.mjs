@@ -10,7 +10,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const NOW = 1_800_000_000_000;
 const CREDS = "offline-user:offline-fixture-secret";
 const SECRET = "upstream-private-message-offline-fixture";
-const moduleUrl = new URL("../local-checkin.mjs", import.meta.url);
+const moduleUrl = new URL("../src/local-checkin.mjs", import.meta.url);
 const repository = dirname(dirname(fileURLToPath(import.meta.url)));
 let initialize, runOnce, resume, status;
 let originalFetch;

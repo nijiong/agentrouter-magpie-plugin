@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import plugin from "../index.mjs";
+import plugin from "../src/index.mjs";
 
 const SITE = "https://ps.air-outer.com";
 const account = { type: "api", key: "sk-inference", metadata: {

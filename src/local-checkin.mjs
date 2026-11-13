@@ -11,7 +11,9 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { currentWindowsTrustee, isPrivateWindowsAcl } from "./windows-acl.mjs";
 
 const DAY = 24 * 60 * 60 * 1000;
-const REPO = path.dirname(fileURLToPath(import.meta.url));
+// The tool lives in src/, so the checkout it must never store credentials in
+// is one level up.
+const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const RESULTS = new Set(["claimed", "done", "failed", "ineligible"]);
 class LocalError extends Error {
   constructor(code) { super(code); this.code = code; }
@@ -240,7 +242,7 @@ export async function watch(home = defaultHome(), { signal, report = r => consol
 }
 
 const HELP =   "Local HTTP only. No browser automation or browser-session extraction.\n" +
-  "Usage: node local-checkin.mjs <init|status|run|watch|resume> [--home ABSOLUTE_DIRECTORY]\n" +
+  "Usage: node src/local-checkin.mjs <init|status|run|watch|resume> [--home ABSOLUTE_DIRECTORY]\n" +
   "After init, fill config.json (site, userId) and credentials.txt (one username:password line).\n" +
   "run/watch: at most one attempt per 24h; failure pauses until explicit resume.\n" +
   "resume: after manual recovery only; keeps the 24h cooldown and makes no request.\n" +

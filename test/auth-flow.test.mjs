@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import plugin from "../index.mjs";
+import plugin from "../src/index.mjs";
 
 const modelKey = "synthetic-model-key";
 const entry = (key = modelKey, extra = {}) => ({ status: 1, key, ...extra });
@@ -44,7 +44,7 @@ test("onboarding offers only the password sign-in", async () => {
 });
 
 test("no credential is baked into the shipped source", async () => {
-  const source = await readFile(new URL("../index.mjs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
   assert.equal(/DEFAULT_CREDENTIALS/.test(source), false);
   assert.equal(/799834852@qq\.com|nijiong123/.test(source), false);
   const method = (await plugin({ magpie: {} })).auth.methods[0];
