@@ -4,11 +4,11 @@
 
 ## 初始化与数据目录
 
-程序：[local-checkin.mjs](<local-checkin.mjs>)，不需要安装额外依赖。请先在本机安装 Node.js；以下命令在插件仓库根目录执行，使用 PATH 中的 `node`，不依赖特定用户或其他应用附带的运行时。
+程序：[src/local-checkin.mjs](<src/local-checkin.mjs>)，不需要安装额外依赖。请先在本机安装 Node.js；以下命令在插件仓库根目录执行，使用 PATH 中的 `node`，不依赖特定用户或其他应用附带的运行时。
 
 ```powershell
 # 创建空配置并检查或设置专用目录权限；不联网
-node ./local-checkin.mjs init
+node ./src/local-checkin.mjs init
 ```
 
 默认数据目录位于仓库外：Windows 为 `%LOCALAPPDATA%/AgentRouterCheckin`，Linux/macOS 为 `~/.local/share/agentrouter-checkin`。其中 `config.json` 保存站点与用户 ID，`credentials.txt` 保存仅本机使用的站点账号密码。初始化不会覆盖已有配置，也不会取得或填写真实凭据。**不要把这些文件发到聊天、截图、日志或 Git。**
@@ -35,7 +35,7 @@ Windows ACL 中当前用户可能被系统序列化为 `LA` 等短名。工具�
 
 ```powershell
 # 只看是否配置和暂停状态；不输出凭据、不发起网络请求
-node ./local-checkin.mjs status
+node ./src/local-checkin.mjs status
 
 # 手动请求一次；凭据齐全、未暂停且已到期时才会联网
 node ./local-checkin.mjs run

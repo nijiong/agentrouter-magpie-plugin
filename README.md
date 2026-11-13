@@ -204,7 +204,7 @@ AgentRouter 的模型**不支持** `/v1/chat/completions`：
 
 如果上游提示 `The requested item was created under a different ... OpenAI resource`，通常是请求引用了另一个资源创建的服务端条目。这不是内容敏感词，也不是改一次 API Key 就能恢复的历史。
 
-默认开启 `portable-responses`：对 `POST .../responses` 中**带完整内联内容**的普通消息和 function-call / function-call-output，去掉用于条目查找的顶层 `id`。完整 assistant 消息在内联后仍保留 `output_text` 及其空 `annotations` / `logprobs`，不会误转为 `input_text`；其他角色沿用输入文本转换。保留角色、正文和 `phase`；工具的 `call_id`、名称、参数、结果及嵌套业务 `id` 保持不变。有改写时设置 `store:false`，清除旧正文长度/摘要头。未改写时保留原始正文。实现见 [request.mjs](<request.mjs>)。
+默认开启 `portable-responses`：对 `POST .../responses` 中**带完整内联内容**的普通消息和 function-call / function-call-output，去掉用于条目查找的顶层 `id`。完整 assistant 消息在内联后仍保留 `output_text` 及其空 `annotations` / `logprobs`，不会误转为 `input_text`；其他角色沿用输入文本转换。保留角色、正文和 `phase`；工具的 `call_id`、名称、参数、结果及嵌套业务 `id` 保持不变。有改写时设置 `store:false`，清除旧正文长度/摘要头。未改写时保留原始正文。实现见 [request.mjs](<src/request.mjs>)。
 
 插件也识别普通 `output_text` 中的空 `logprobs: []`（网关可能随完成消息一起输出）。空概率数组不阻碍完整消息内联，assistant 消息内联时仍原样保留该字段；**非空、`null` 或形状未知的概率数据保持原样**。这类完整消息的顶层 ID 曾因该字段未被识别而保留，合成资源切换回归覆盖了此缺口。
 
@@ -224,7 +224,7 @@ AgentRouter 的模型**不支持** `/v1/chat/completions`：
 
 面板里的模型来自**两个来源的并集**：
 
-1. **插件自己的名单**（本仓库 `index.mjs` 的 `DECLARED_MODELS`）：登录前展示用，也是读不到站点列表时的兜底。当前是 `gpt-5.6-sol` / `gpt-6-astra` / `gpt-6.1-sol`。
+1. **插件自己的名单**（本仓库 `src/index.mjs` 的 `DECLARED_MODELS`）：登录前展示用，也是读不到站点列表时的兜底。当前是 `gpt-5.6-sol` / `gpt-6-astra` / `gpt-6.1-sol`。
 2. **magpie 自带的 models.dev 目录**：`magpie` 会把目录里同名条目（`agentrouter`）的模型并进来。这个目录在服务器上是 `config/cache/magpie/models.json`，**由 magpie 自己同步，不由本插件控制**。
 
 两者取并集去重。因此如果站点下架了某个模型，而目录缓存里还留着，面板就会多列出已下架的模型 —— 选中它只会得到：
@@ -280,7 +280,7 @@ AgentRouter 在模型前面挂了自己的**内容过滤器**。它拒绝一段�
 
 提供商选项 **Filter configured prose before sending**（`text-filter`，默认开启）控制发送前替换。**没有词表或 `terms` 为空时不改正文**；不内置猜测词，不自动学习被拒的私密请求，不发送探测请求，也不追加重试。
 
-1. 将插件目录中的 [content-filter.example.json](<content-filter.example.json>) 复制为 `content-filter.local.json`，与 [index.mjs](<index.mjs>) 放在同一目录。magpie 使用的是**服务端安装目录**，不是浏览器本机目录。
+1. 将 [src/content-filter.example.json](<src/content-filter.example.json>) 复制为 `src/content-filter.local.json`，与 [src/index.mjs](<src/index.mjs>) 放在同一目录（即插件安装目录下的 `src/`）。magpie 使用的是**服务端安装目录**，不是浏览器本机目录。
 2. 仅填写自己确认需要替换的词；词表按字面量匹配，不支持正则。示例中的值仅为占位，不代表厂商拦截词：
 
    ```json
@@ -300,7 +300,7 @@ AgentRouter 在模型前面挂了自己的**内容过滤器**。它拒绝一段�
 - 请求沿用 4 MiB UTF-8 / Request 副本 2 秒的边界。超限、无法读取、非 JSON、压缩正文按原有逻辑透传，**不是已过滤的证明**。
 - 词表最多 32 KiB、128 条；每条最多 256 个 UTF-16 代码单元，总计最多 8192。不存在/空词表视为停用；配置存在但 JSON、结构、编码或读取失败时，启用状态下拒绝创建 loader，而不是静默忽略。错误只给固定提示，不输出词条或请求正文。
 
-实现：[content-filter.mjs](<content-filter.mjs>)；回归测试：[test/content-filter.test.mjs](<test/content-filter.test.mjs>)。
+实现：[content-filter.mjs](<src/content-filter.mjs>)；回归测试：[test/content-filter.test.mjs](<test/content-filter.test.mjs>)。
 
 文字过滤也接受普通 `output_text` 中的空 `logprobs: []`。过滤先于历史内联执行，因此开启或关闭内联都适用；关闭内联时保留原消息 ID、`output_text` 类型、空概率数组及注释。非空、`null`、形状未知的概率数据，以及未知字段、真实注释或签名仍原样保留。`input_text` 中的未知概率字段不会因此获得放行资格。
 
@@ -341,7 +341,7 @@ magpie 识别流内错误为 429 后，可能立即换账号，再对同一账�
 
 ## 有界响应诊断与增量 SSE
 
-JSON 仅在 HTTP **200 / 400 / 429** 时检查副本，最多 **64 KiB / 2 秒**；检查的是实际 UTF-8 字节，不信任 `Content-Length`。超限、超时、错误编码、读取失败或非 JSON 时放弃诊断，保留原响应供调用方读取。该上限约束诊断工作量，不限制整段正常回复，也无法阻止上游一次分配更大的单个数据块。共享实现见 [body-inspection.mjs](<body-inspection.mjs>)。
+JSON 仅在 HTTP **200 / 400 / 429** 时检查副本，最多 **64 KiB / 2 秒**；检查的是实际 UTF-8 字节，不信任 `Content-Length`。超限、超时、错误编码、读取失败或非 JSON 时放弃诊断，保留原响应供调用方读取。该上限约束诊断工作量，不限制整段正常回复，也无法阻止上游一次分配更大的单个数据块。共享实现见 [body-inspection.mjs](<src/body-inspection.mjs>)。
 
 只从明确的 `error`、`response.error`、SSE `event:error` 等错误封套读取最多四层嵌套的 `message` / `msg`，也支持其中 JSON 编码的错误。**不会扫描成功正文、工具结果或普通文字来猜错误**。无法识别的错误原样透传。每一层嵌套都先验证有效错误叶子，再继承有效数字状态；不借用包装层正文。预算耗尽且仍有未检查的嵌套时也原样放行，不根据已读取的祖先字段猜测。新增归类如下：
 
@@ -356,7 +356,7 @@ JSON 仅在 HTTP **200 / 400 / 429** 时检查副本，最多 **64 KiB / 2 秒**
 
 改写后的响应保留上游代码与消息（`error.code` / `error.upstream`）、request-id，以及 `Retry-After`（包括 HTTP 日期）和上游毫秒等待头；仅清除失效的正文长度、编码和摘要头。新增归类不自造重试时长。调用是否重试由宿主决定，插件不会多发一次 POST、切换账号或降级历史。
 
-SSE 仍只观察首个有效内容或未知事件之前最多 **64 KiB / 15 秒** 的前缀。增量解析兼容混合换行、注释、多行 `data:` 与跨块 UTF-8；重复 `event:` 取最后一个值，只移除冒号后的一个可选空格。已知字段内出现未知数据形状时也立即结束诊断，透传原始字节并保留取消、背压及超时中的在途读取；不发送心跳、不缓存整段回答、不观察已经放行的后续事件。相关实现见 [response.mjs](<response.mjs>)。
+SSE 仍只观察首个有效内容或未知事件之前最多 **64 KiB / 15 秒** 的前缀。增量解析兼容混合换行、注释、多行 `data:` 与跨块 UTF-8；重复 `event:` 取最后一个值，只移除冒号后的一个可选空格。已知字段内出现未知数据形状时也立即结束诊断，透传原始字节并保留取消、背压及超时中的在途读取；不发送心跳、不缓存整段回答、不观察已经放行的后续事件。相关实现见 [response.mjs](<src/response.mjs>)。
 
 ## 账号密码登录与故障恢复（本地定制版）
 
@@ -468,16 +468,24 @@ npm test                 # Node.js 插件与本地签到回归
 npm run test:headers     # 需要 Python 3；仅执行维护脚本的 Python 部分，不调用 Docker
 ```
 
-## 文件
+## 目录结构
 
-| `index.mjs` — 插件本体（provider + 自定义头 + 余额 + 签到 + 账号密码登录）
-- `response.mjs` — HTTP / SSE 早期失败识别与有界流透传（安装时必须一起复制）
-- `package.json` — 包描述
+插件源码统一放在 `src/`，回归测试统一放在 `test/`，文档与包描述留在仓库根目录：
+
+- [src/index.mjs](<src/index.mjs>) — 插件本体（provider + 自定义头 + 余额 + 签到 + 账号密码登录），也是 `package.json` 的入口
+- [src/response.mjs](<src/response.mjs>) — HTTP / SSE 早期失败识别与有界流透传
+- [src/request.mjs](<src/request.mjs>) — 请求范围判断、正文过滤与历史内联
+- [src/body-inspection.mjs](<src/body-inspection.mjs>) — 共享的有界正文读取器
+- [src/content-filter.mjs](<src/content-filter.mjs>) — 本地词表加载与替换；示例见 [src/content-filter.example.json](<src/content-filter.example.json>)
+- [src/local-checkin.mjs](<src/local-checkin.mjs>) — 独立本地签到工具；权限检查见 [src/windows-acl.mjs](<src/windows-acl.mjs>)
+- `package.json` — 包描述（`main` / `exports` 指向 `src/index.mjs`）
 - `set-ar-headers.sh` — 改请求头的小工具
 - `test/` — 全部回归测试（`npm test` 运行；`test/set-ar-headers.test.py` 由 `npm run test:headers` 运行）
 - `test/usage.test.mjs` — 额度读取、登录与 HTTP 错误回归测试
 - `test/loader-stream.test.mjs` — 流内错误、空完成、成功字节、工具调用等回归测试
 - `test/response-bounds.test.mjs` — 有界缓存、检查超时与取消测试（统一运行 `npm test`）
+
+`src/` 内的模块相互以相对路径引用，**升级或手动安装时必须整目录一起复制**，只覆盖入口文件会导致模块加载失败。
 
 ## 已知问题与排查
 

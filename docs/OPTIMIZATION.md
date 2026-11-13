@@ -41,13 +41,13 @@
 
 | 模块 | 职责 |
 | --- | --- |
-| [body-inspection.mjs](<../body-inspection.mjs>) | 内部共享读取器 `readCloneText`；返回完整有效的 UTF-8 文本或无法检查的结果，不消费调用方原始正文 |
-| [request.mjs](<../request.mjs>) | 判断请求范围、执行过滤及内联、维护改写后的请求头 |
-| [content-filter.mjs](<../content-filter.mjs>) | 加载私有字面量词表，保护代码、工具数据和不透明内容 |
-| [response.mjs](<../response.mjs>) | JSON 错误分类、SSE 前导观察、失败说明与原始流转交 |
-| [index.mjs](<../index.mjs>) | 对接宿主选项及 fetch；一次宿主 fetch 调用至多发起一次上游 fetch；缺失 key 时本地拒绝 |
+| [body-inspection.mjs](<../src/body-inspection.mjs>) | 内部共享读取器 `readCloneText`；返回完整有效的 UTF-8 文本或无法检查的结果，不消费调用方原始正文 |
+| [request.mjs](<../src/request.mjs>) | 判断请求范围、执行过滤及内联、维护改写后的请求头 |
+| [content-filter.mjs](<../src/content-filter.mjs>) | 加载私有字面量词表，保护代码、工具数据和不透明内容 |
+| [response.mjs](<../src/response.mjs>) | JSON 错误分类、SSE 前导观察、失败说明与原始流转交 |
+| [index.mjs](<../src/index.mjs>) | 对接宿主选项及 fetch；一次宿主 fetch 调用至多发起一次上游 fetch；缺失 key 时本地拒绝 |
 
-共享读取器是内部模块，不新增根入口公开 API。本次没有新增依赖、环境变量或提供商选项。
+以上模块统一位于仓库的 `src/` 目录，`package.json` 的 `main` / `exports` 指向 `src/index.mjs`；共享读取器是内部模块，不新增根入口公开 API。本次没有新增依赖、环境变量或提供商选项。
 
 ## 3A. 登录与凭据边界
 
@@ -89,7 +89,7 @@ loader 对缺失 key 或保留占位 key 在网络前返回本地 `400 agentrout
 
 “两项都关”仅指请求正文变换：认证/客户端请求头处理与响应诊断仍存在，不是整个插件的旁路开关。没有实际替换或内联变化时，保留原始请求正文，不为了格式化 JSON 而重写。只有真正执行了历史内联，才设置 `store:false`；仅过滤正文不会附带修改该值。
 
-本地规则从插件安装目录的 `content-filter.local.json` 加载，格式见 [示例配置](<../content-filter.example.json>)。以下仅是虚构字面量，不代表厂商拦截词：
+本地规则从插件安装目录的 `src/content-filter.local.json` 加载（与 `src/index.mjs` 同级），格式见 [示例配置](<../src/content-filter.example.json>)。以下仅是虚构字面量，不代表厂商拦截词：
 
 ```json
 { "terms": ["示例占位短语"], "caseSensitive": true }
@@ -224,7 +224,7 @@ Markdown 采取保守策略，而不是试图实现完整语法解析器：
 
 1. 阅读 [使用说明](<../README.md>) 和 [版本记录](<../CHANGELOG.md>)，核对来源：本地包/目录安装应核对提交、包版本和宿主实际运行版本。不能把源码版本号当成 npm 发布或远程网关升级证明。
 2. 在受保护的位置备份当前插件版本、私有词表及宿主管理的配置；不要将凭据备份加入公开仓库。
-3. 使用已核验的完整本地包或完整插件目录升级，不能只覆盖入口文件。新增 [body-inspection.mjs](<../body-inspection.mjs>) 是运行时必需模块，漏带会导致模块加载失败。
+3. 使用已核验的完整本地包或完整插件目录升级，不能只覆盖入口文件。`src/` 下的模块相互以相对路径引用，[body-inspection.mjs](<../src/body-inspection.mjs>) 等运行时必需模块漏带会导致模块加载失败；私有词表仍放在 `src/content-filter.local.json`。
 4. 无需迁移认证字段、选项或环境变量；升级前后核对旧 key、site 和其他设置不变，不必重新登录。重新加载插件，让运行中的 loader 使用新源码与规则快照。先确认四种开关组合符合自己的使用意图。
 5. 如只需停用正文变换，可关闭两个正文选项；这不会停用响应诊断。需要完整回退时，恢复此前验证过的完整版本并重新加载，不混用新旧模块。
 6. 回退至上游版本会恢复其 API Key / GitHub OAuth / 站点选择等入口，并失去本定制版的固定国内站与手动输入账号密码行为。已存的显式 apiBase 仍是旧版本识别的字段，回退不会自动改写已保存的账号 metadata；应保留并核对原有配置备份。更早版本还会失去各自后续引入的密钥保护、诊断、SSE 或过滤修复；回退不能恢复已缺失的上游历史。
