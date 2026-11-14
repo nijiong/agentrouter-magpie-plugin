@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import plugin from "../src/index.mjs";
+import { withFetch } from "./helpers/fetch.mjs";
 
 const SITE = "https://ps.air-outer.com";
 const account = { type: "api", key: "sk-inference", metadata: {
@@ -8,21 +9,13 @@ const account = { type: "api", key: "sk-inference", metadata: {
 } };
 const json = (data, headers = {}) => new Response(JSON.stringify(data), {headers: {"content-type": "application/json", ...headers}});
 
-async function run(auth, routes = []) {
-  const calls = [];
-  const real = globalThis.fetch;
-  globalThis.fetch = async (url, init = {}) => {
-    const call = {url: new URL(String(url)), init, headers: new Headers(init.headers)};
-    calls.push(call);
-    assert.ok(routes.length, "unexpected request: " + call.url.origin + call.url.pathname);
-    return routes.shift()(call);
-  };
-  try {
+async function run(auth, routes = [], provider = {}) {
+  return withFetch(routes, async calls => {
     const p = await plugin();
-    const result = await p.auth.checkin(async () => auth, {});
+    const result = await p.auth.checkin(async () => auth, provider);
     assert.equal(routes.length, 0, "all expected requests were made");
     return {result, calls};
-  } finally { globalThis.fetch = real; }
+  });
 }
 
 const login = (data) => ({url, init, headers}) => {
@@ -108,11 +101,29 @@ test("check-in prompts never ask for a removed credential", async () => {
   }
 });
 
-test("check-in never leaves the fixed site origin", async () => {
+test("check-in uses the domestic site origin by default", async () => {
   const {result, calls} = await run(account, [login({id: 42, checked_in: true})]);
   assert.equal(result.outcome, "claimed");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url.origin, SITE);
+});
+
+test("explicit siteURL overrides retain stored-account and provider precedence", async () => {
+  const override = "https://site.example";
+  for (const [auth, provider] of [
+    [{ ...account, metadata: { ...account.metadata, siteURL: override + "/" } }, { siteURL: "https://provider.example" }],
+    [{ ...account, siteURL: override, metadata: { ...account.metadata, siteURL: "https://nested.example" } }, {}],
+    [account, { siteURL: override + "/" }],
+  ]) {
+    const { result, calls } = await run(auth, [({ url, init, headers }) => {
+      assert.equal(url.href, override + "/api/user/login");
+      assert.equal(init.method, "POST");
+      assert.equal(headers.has("authorization"), false);
+      return json({ success: true, data: { id: 42, checked_in: true } });
+    }], provider);
+    assert.equal(result.outcome, "claimed");
+    assert.equal(calls.length, 1);
+  }
 });
 
 for (const status of [403, 429, 500]) {

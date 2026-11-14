@@ -1,24 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import plugin from "../src/index.mjs";
+import { withFetch as stubFetch } from "./helpers/fetch.mjs";
 
 const raw = (body, headers = {}) => new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json", ...headers } });
 // Magpie's failed() adapter consumes error, not message.
 function hostFailed(r) {
   const why = typeof r?.error === "string" ? r.error.trim() : r?.error instanceof Error ? r.error.message : "";
   return why ? { ok: false, error: why.slice(0, 500) } : { ok: false };
-}
-async function stubFetch(responses, fn) {
-  const original = globalThis.fetch;
-  const calls = [];
-  globalThis.fetch = async (url, init = {}) => {
-    calls.push({ url: String(url), init });
-    assert.ok(responses.length, "unexpected request");
-    const response = responses.shift();
-    if (response instanceof Error) throw response;
-    return response;
-  };
-  try { return await fn(calls); } finally { globalThis.fetch = original; }
 }
 const loginResponses = () => [
   raw({ success: true, data: { id: 42, checked_in: true } }, { "Set-Cookie": "session=synthetic-site; Path=/; HttpOnly" }),
@@ -123,8 +112,8 @@ test("password sign-in saves the session, account and a usable model key", async
       userId: "42",
       cookie: "session=synthetic-site",
     });
-    assert.ok(calls.every(c => c.url.startsWith("https://ps.air-outer.com/")));
-    assert.equal(calls[0].url, "https://ps.air-outer.com/api/user/login");
+    assert.ok(calls.every(c => c.url.origin === "https://ps.air-outer.com"));
+    assert.equal(calls[0].url.href, "https://ps.air-outer.com/api/user/login");
     assert.equal(JSON.parse(calls[0].init.body).username, "site-user");
     assert.equal(new Headers(calls[1].init.headers).get("Cookie"), "session=synthetic-site");
     assert.equal(new Headers(calls[1].init.headers).get("New-Api-User"), "42");

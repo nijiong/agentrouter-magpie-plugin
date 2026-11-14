@@ -1,22 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import plugin from "../src/index.mjs";
+import { withFetch } from "./helpers/fetch.mjs";
 
 const modelKey = "synthetic-model-key";
 const entry = (key = modelKey, extra = {}) => ({ status: 1, key, ...extra });
 const json = (data, headers = {}) => new Response(JSON.stringify(data), { headers: { "content-type": "application/json", ...headers } });
-
-async function withFetch(routes, fn) {
-  const original = globalThis.fetch;
-  const calls = [];
-  globalThis.fetch = async (url, init = {}) => {
-    calls.push({ url: new URL(String(url)), init, headers: new Headers(init.headers) });
-    assert.ok(routes.length, "unexpected request: " + String(url));
-    return routes.shift()(calls.at(-1));
-  };
-  try { return await fn(calls); } finally { globalThis.fetch = original; }
-}
 
 const loginRoute = (data = { id: 42, checked_in: true }) => ({ headers }) => {
   assert.equal(headers.get("authorization"), null);
@@ -45,7 +35,8 @@ test("onboarding offers only the password sign-in", async () => {
 });
 
 test("no credential is baked into the shipped source", async () => {
-  const source = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
+  const files = (await readdir(new URL("../src/", import.meta.url))).filter(name => name.endsWith(".mjs"));
+  const source = (await Promise.all(files.map(name => readFile(new URL("../src/" + name, import.meta.url), "utf8")))).join("\n");
   assert.equal(/DEFAULT_CREDENTIALS/.test(source), false);
   assert.equal(/799834852@qq\.com|nijiong123/.test(source), false);
   const method = (await plugin({ magpie: {} })).auth.methods[0];

@@ -1,17 +1,13 @@
 import { redactResponsesBody } from "./content-filter.mjs";
 import { readCloneText } from "./body-inspection.mjs";
+import { isPlainMessage, isPlainTextPart } from "./responses-shapes.mjs";
 
 // Replay complete items inline instead of asking a load-balanced resource to
 // retrieve them by an old item ID. Never remove call_id or opaque contents.
 function isInlinePart(part) {
   if (!part || typeof part !== "object") return false;
   if (["input_text", "input_image", "input_file", "input_audio"].includes(part.type)) return true;
-  if (part.type !== "output_text" || typeof part.text !== "string") return false;
-  // The gateway also emits logprobs: [] on ordinary completed text. Empty
-  // probability metadata adds no content; populated or unknown data stays intact.
-  return Object.keys(part).every(key => ["type", "text", "annotations", "logprobs"].includes(key)) &&
-    (part.annotations == null || Array.isArray(part.annotations) && part.annotations.length === 0) &&
-    (!Object.hasOwn(part, "logprobs") || Array.isArray(part.logprobs) && part.logprobs.length === 0);
+  return part.type === "output_text" && isPlainTextPart(part);
 }
 
 function hasInlineContent(item) {
@@ -19,8 +15,7 @@ function hasInlineContent(item) {
   switch (item.type) {
     case undefined:
     case "message":
-      return ["user", "assistant", "system", "developer"].includes(item.role) &&
-        Object.keys(item).every(key => ["type", "id", "role", "content", "status", "phase"].includes(key)) &&
+      return isPlainMessage(item) &&
         (typeof item.content === "string" && item.content.length > 0 ||
           Array.isArray(item.content) && item.content.length > 0 && item.content.every(isInlinePart));
     case "function_call":

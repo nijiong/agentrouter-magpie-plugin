@@ -1,6 +1,6 @@
 # AgentRouter 插件（magpie）
 
-给 magpie 接入 AgentRouter [国内站](https://ps.air-outer.com/)：本定制版仅支持**账号密码登录**（由你手动输入并保存），提供模型调用、余额与用量查询、每日签到，以及**可自定义请求头**。所有请求固定发往 `ps.air-outer.com`。
+给 magpie 接入 AgentRouter [国内站](https://ps.air-outer.com/)：本定制版仅支持**账号密码登录**（由你手动输入并保存），提供模型调用、余额与用量查询、每日签到，以及**可自定义请求头**。默认使用 `ps.air-outer.com`；保留显式端点与站点接口地址覆盖能力，详见[端点与站点](<#端点与站点>)。
 
 ## 文档导航
 
@@ -13,10 +13,10 @@
 
 > 仓库源码更新不等于 npm 发布或你的网关已升级。请按升级指南自行验证；不要把真实 Cookie、访问令牌、私有词表或抓包提交到仓库。
 
-### 本地定制版：账号密码登录，固定国内站
+### 本地定制版：账号密码登录，默认国内站
 
 - 仅保留**账号密码登录**一种入口，账号与密码由你手动输入后保存（源码不含任何内置凭据）；移除 API Key、GitHub 授权、系统访问令牌入口与站点选择。
-- 所有请求（模型、登录、余额、签到、Key 列表）固定发往 `https://ps.air-outer.com`，国际站 `agentrouter.org` 已移除。
+- 登录表单及本地签到工具使用 `https://ps.air-outer.com`；已保存账号与提供商的高级地址覆盖能力保留，国际站 `agentrouter.org` 的内置入口已移除。
 - 登录成功后以会话只读查找账号下已有模型 Key 并保存；签到即密码重新登录，不再需要 GitHub Cookie。
 - 作为**独立插件**维护，不跟随上游更新；版本变化见[更新日志](<CHANGELOG.md>)。
 
@@ -55,7 +55,7 @@ magpie plugin add /path/to/agentrouter-magpie-plugin
 
 ### 2. 登录并绑定账号（本地定制版）
 
-本定制版只保留**账号密码登录**一种方式，且所有请求固定发往国内站 `https://ps.air-outer.com`（已移除国际站 agentrouter.org、API Key、GitHub 授权与系统访问令牌入口）。登录表单的账号与密码均为空，需你本人输入自己的站点账号；两者必填，留空会在发起任何请求前被拒绝。也可按下文手动配置 `username` / `password`。
+本定制版只保留**账号密码登录**一种方式，登录表单使用国内站 `https://ps.air-outer.com`（已移除国际站 agentrouter.org、API Key、GitHub 授权与系统访问令牌入口）。登录表单的账号与密码均为空，需你本人输入自己的站点账号；两者必填，留空会在发起任何请求前被拒绝。也可按下文手动配置 `username` / `password`；显式地址配置的作用范围见[端点与站点](<#端点与站点>)。
 
 ```bash
 docker exec -it magpie magpie plugin login agentrouter
@@ -112,13 +112,15 @@ docker exec magpie magpie quota agentrouter
 |---|---|---|
 | **账号密码登录** | 站点账号、站点密码（均需手动输入）；多把 Key 时从列表选择一把 | 登录成功后只读列出已有模型 key：唯一时自动选用，多把时由你选择；密码与会话不能用于模型调用 |
 
-所有请求固定发往 `https://ps.air-outer.com`；本定制版已移除国际站与其他登录入口。
+默认使用 `https://ps.air-outer.com`，保留已有高级地址覆盖配置；本定制版已移除国际站的内置入口与其他登录入口。
 
 余额与签到的既有能力继续保留。需要高级配置时，先备份，再按下文 [手动配置格式](<#手动配置文件格式plugin-authjson>) 维护既有账号 metadata；这些不是额外登录方式或必填问题：
 
 - `username` / `password`：你本人的站点账号与密码；两者必填，留空时登录、签到与余额回落到密码登录都会被本地拒绝。
 - `cookie` + `userId`：登录会话读取账号余额；不保证通过 WAF。
-- `endpoint` / `apiBase` / `headers`：保留既有端点与请求头能力（默认均为 ps.air-outer.com）。
+- `endpoint` / `apiBase`：保留模型地址覆盖能力，默认 `https://ps.air-outer.com/v1`。
+- `siteURL`：保留余额、用量站点接口与签到登录的地址覆盖能力，默认 `https://ps.air-outer.com`；不改变首次登录表单及其 Key 列表地址。
+- `headers`：保留自定义请求头能力。
 
 **当前插件选项仅支持布尔开关，没有新增 Cookie 设置页或任意文本选项。** 不要把凭据粘贴到布尔选项；高级字段只能通过已有宿主能力或下文的手动配置路径维护。
 
@@ -413,9 +415,11 @@ SSE 仍只观察首个有效内容或未知事件之前最多 **64 KiB / 15 秒*
 
 ## 端点与站点
 
-- 本定制版所有请求（模型、登录、余额、签到、Key 列表）固定发往 `https://ps.air-outer.com`；国际站入口已移除。
-- `endpoint` / `apiBase` 显式配置时仍可覆盖模型请求地址（高级路径，默认 `https://ps.air-outer.com/v1`）。
-- `site` 字段固定为 `air`，仅保留兼容旧配置。
+- 默认站点为 `https://ps.air-outer.com`；国际站的内置入口和登录表单的站点选择已移除，不是强制限制所有请求目标地址。
+- 模型、模型列表及 Key 消耗查询的地址依次使用：账号的显式 `endpoint`（未设置时读取提供商 `endpoint`，有效 HTTP(S) 地址后追加 `/v1`）→ 账号的 `apiBase` → 默认 `https://ps.air-outer.com/v1`。非 URL 的 `endpoint` 仍按原规则忽略，不改写旧配置。
+- 余额读取、账号消耗查询与签到重新登录使用账号的显式 `siteURL`，未设置时读取提供商 `siteURL`，否则使用默认国内站。`siteURL` 不参与模型地址解析；`endpoint` / `apiBase` 不参与站点接口地址解析。
+- 首次登录表单及登录后的 Key 列表读取仍使用国内站，不接受上述高级覆盖；本地签到工具的配置也不新增地址字段。
+- `site` 字段仍为 `air`；这只是保存的兼容标记，不是地址覆盖开关。高级覆盖只改变目标地址，不保证其他站点具有相同接口或业务行为。
 
 ## 额度百分比与字段说明
 
@@ -464,14 +468,18 @@ npm test                 # Node.js 插件与本地签到回归
 
 插件源码统一放在 `src/`，回归测试统一放在 `test/`，文档与包描述留在仓库根目录：
 
-- [src/index.mjs](<src/index.mjs>) — 插件本体（provider + 自定义头 + 余额 + 签到 + 账号密码登录），也是 `package.json` 的入口
+- [src/index.mjs](<src/index.mjs>) — 宿主 hook、模型配置、选项与 fetch 处理链组装，仍为 `package.json` 的入口
+- [src/site-client.mjs](<src/site-client.mjs>) — 地址 / 认证头 / Cookie 解析、站点请求与余额字段转换
+- [src/sign-in.mjs](<src/sign-in.mjs>) — 登录提问、短期缓存、模型 Key 选择与授权结果
+- [src/account-services.mjs](<src/account-services.mjs>) — 余额回落、用量展示和插件 / 本地工具共享的签到实现
+- [src/responses-shapes.mjs](<src/responses-shapes.mjs>) — 请求回放与文本过滤共享的基础消息形状判断
 - [src/response.mjs](<src/response.mjs>) — HTTP / SSE 早期失败识别与有界流透传
 - [src/request.mjs](<src/request.mjs>) — 请求范围判断、正文过滤与历史内联
 - [src/body-inspection.mjs](<src/body-inspection.mjs>) — 共享的有界正文读取器
 - [src/content-filter.mjs](<src/content-filter.mjs>) — 本地词表加载与替换；示例见 [src/content-filter.example.json](<src/content-filter.example.json>)
 - [src/local-checkin.mjs](<src/local-checkin.mjs>) — 独立本地签到工具；权限检查见 [src/windows-acl.mjs](<src/windows-acl.mjs>)
 - `package.json` — 包描述（`main` / `exports` 指向 `src/index.mjs`）
-- `test/` — 全部回归测试（`npm test` 运行）
+- `test/` — 全部回归测试（`npm test` 运行）；[test/helpers/](<test/helpers/>) 提供共享 fetch 模拟与按发布清单复制模块的安装目录 fixture
 - `test/usage.test.mjs` — 额度读取、登录与 HTTP 错误回归测试
 - `test/loader-stream.test.mjs` — 流内错误、空完成、成功字节、工具调用等回归测试
 - `test/response-bounds.test.mjs` — 有界缓存、检查超时与取消测试（统一运行 `npm test`）
@@ -492,7 +500,7 @@ npm test                 # Node.js 插件与本地签到回归
 
 本插件基于 **ZhaoJun233** 的 [agentrouter-magpie-plugin](https://github.com/ZhaoJun233/agentrouter-magpie-plugin) 二次开发，现由 [nijiong](https://github.com/nijiong/agentrouter-magpie-plugin) 独立维护，**不再跟随上游更新**。
 
-衷心感谢原作者 **ZhaoJun233**：本插件的核心能力——有界响应诊断、增量 SSE 前导观察、assistant 历史与不透明状态的无损保留、本地文字过滤，以及本地签到工具的 ACL 安全机制——均源自其设计与实现。本定制版只是在此基础上收窄登录方式、固定站点并清理历史遗留代码。
+衷心感谢原作者 **ZhaoJun233**：本插件的核心能力——有界响应诊断、增量 SSE 前导观察、assistant 历史与不透明状态的无损保留、本地文字过滤，以及本地签到工具的 ACL 安全机制——均源自其设计与实现。本定制版在此基础上收窄登录方式、默认使用国内站并保留高级地址配置，同时整理模块与历史遗留代码。
 
 同时感谢参考项目 [AgentRouter-Codex-Filter](https://github.com/alexcarterio/AgentRouter-Codex-Filter)（MIT，作者 alexcarterio）提供的保守错误诊断思路。本插件延续该取舍：不引入独立代理、仪表盘、遥测、自动重试或有损历史降级。
 

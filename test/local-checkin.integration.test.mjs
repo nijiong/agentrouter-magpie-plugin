@@ -4,6 +4,9 @@ import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { initialize, runOnce, status } from "../src/local-checkin.mjs";
+import { pathToFileURL } from "node:url";
+import { withFetch } from "./helpers/fetch.mjs";
+import { copyRuntimeModules } from "./helpers/runtime.mjs";
 
 for (const scenario of [
   { name: "server confirms a new reward", marker: true, outcome: "claimed", paused: false },
@@ -51,6 +54,34 @@ for (const scenario of [
     }
   });
 }
+
+test("local default checkin runs without the host plugin entry and keeps its cooldown", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "ar-standalone-"));
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "ar-standalone-home-"));
+  try {
+    const source = path.join(root, "src");
+    await fs.mkdir(source);
+    await copyRuntimeModules(source);
+    await fs.rm(path.join(source, "index.mjs"));
+    const { runOnce: standaloneRun } = await import(pathToFileURL(path.join(source, "local-checkin.mjs")).href);
+    await initialize(home);
+    await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ version: 1, site: "air", userId: "42" }));
+    await fs.writeFile(path.join(home, "credentials.txt"), "offline-user:offline-only");
+    await withFetch([({ url, init }) => {
+      assert.equal(url.href, "https://ps.air-outer.com/api/user/login");
+      assert.deepEqual(JSON.parse(init.body), { username: "offline-user", password: "offline-only" });
+      return Response.json({ success: true, data: { id: 42, checked_in: true } });
+    }], async calls => {
+      const now = () => 1_800_000_000_000;
+      assert.equal((await standaloneRun(home, { now })).outcome, "claimed");
+      assert.equal((await standaloneRun(home, { now })).outcome, "skipped");
+      assert.equal(calls.length, 1);
+    });
+  } finally {
+    await fs.rm(home, { recursive: true, force: true });
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
 
 for (const initial of ["claimed", "failed"]) {
   test("resume preserves 24h gate after " + initial, async () => {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { AgentRouterAuthPlugin, _internal } from '../src/index.mjs';
+import { AgentRouterAuthPlugin } from '../src/index.mjs';
+import { headersOf } from '../src/site-client.mjs';
 
 const plugin = await AgentRouterAuthPlugin();
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
@@ -61,16 +62,16 @@ test('The Codex headers are always sent unless the user overrides them', async (
   // The gateway only admits its own client, so the Codex User-Agent is a
   // default, not a switch. A user with another working identity overrides
   // it in their own header block.
-  assert.equal(_internal.headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
-  assert.equal(_internal.headersOf({}, {}).Accept, 'application/json');
+  assert.equal(headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
+  assert.equal(headersOf({}, {}).Accept, 'application/json');
   assert.equal(
-    _internal.headersOf({}, { metadata: { headers: 'User-Agent: mine' } })['User-Agent'],
+    headersOf({}, { metadata: { headers: 'User-Agent: mine' } })['User-Agent'],
     'mine',
   );
 
   // A host from before options hands over no reader at all; same default.
   await AgentRouterAuthPlugin();
-  assert.equal(_internal.headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
+  assert.equal(headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
 });
 
 test('A retired model is never advertised back, whichever path lists it', async () => {
@@ -78,7 +79,9 @@ test('A retired model is never advertised back, whichever path lists it', async 
   // site has retired. The plugin's own list is what it answers with when the
   // vendor's list cannot be read, so those names cannot come back through it.
   const retired = ['claude-opus-5', 'claude-opus-4-8', 'deepseek-v4-flash', 'glm-5.3'];
-  const declared = Object.keys(_internal.declaredModels());
+  const config = {};
+  await plugin.config(config);
+  const declared = Object.keys(config.provider.agentrouter.models);
   assert.deepEqual(declared, ['gpt-5.6-sol', 'gpt-6-astra', 'gpt-6.1-sol']);
   for (const id of retired) assert.ok(!declared.includes(id), `${id} must not be declared`);
 

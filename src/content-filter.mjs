@@ -1,4 +1,5 @@
 import { open } from "node:fs/promises";
+import { isPlainMessage, isPlainTextPart } from "./responses-shapes.mjs";
 
 const MARKER = "[FILTERED]";
 const MAX_CONFIG_BYTES = 32 * 1024;
@@ -193,18 +194,12 @@ export function redactResponsesBody(body, filter) {
   let replacements = 0;
   const redact = text => { const result = filter(text); replacements += result.replacements; return result.text; };
   const part = value => {
-    if (!value || typeof value !== "object" || !["input_text", "output_text"].includes(value.type) ||
-        typeof value.text !== "string" || Object.keys(value).some(key =>
-          !["type", "text", "annotations"].includes(key) &&
-          !(value.type === "output_text" && key === "logprobs" && Array.isArray(value.logprobs) && !value.logprobs.length)) ||
-        value.annotations != null && (!Array.isArray(value.annotations) || value.annotations.length)) return value;
+    if (!isPlainTextPart(value)) return value;
     const text = redact(value.text);
     return text === value.text ? value : { ...value, text };
   };
   const message = item => {
-    if (!item || typeof item !== "object" || (item.type != null && item.type !== "message") ||
-        !["user", "assistant", "system", "developer"].includes(item.role) ||
-        Object.keys(item).some(key => !["type", "id", "role", "content", "status", "phase"].includes(key))) return item;
+    if (!isPlainMessage(item) || (item.type != null && item.type !== "message")) return item;
     const before = replacements;
     const content = typeof item.content === "string" ? redact(item.content) : Array.isArray(item.content) ? item.content.map(part) : item.content;
     return replacements === before ? item : { ...item, content };

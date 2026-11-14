@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile, rm, copyFile } from "node:fs/promises";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 import { createTextFilter, loadTextFilter, redactResponsesBody } from "../src/content-filter.mjs";
 import { prepareRequest } from "../src/request.mjs";
+import { copyRuntimeModules } from "./helpers/runtime.mjs";
 
 const url = "https://example.test/v1/responses";
 const filter = () => createTextFilter({ terms: ["private-term", "内部词"] });
@@ -278,9 +279,7 @@ test("filtering and inline replay compose without dropping call IDs or changing 
 
 test("installed loader honors all independent options and their enabled defaults", async t => {
   const dir = await directory(t);
-  for (const name of ["index.mjs", "request.mjs", "body-inspection.mjs", "response.mjs", "content-filter.mjs"]) {
-    await copyFile(new URL("../src/" + name, import.meta.url), join(dir, name));
-  }
+  await copyRuntimeModules(dir);
   await writeFile(join(dir, "content-filter.local.json"), JSON.stringify({ terms: ["private-term"] }));
   const { AgentRouterAuthPlugin } = await import(pathToFileURL(join(dir, "index.mjs")).href);
   let options;
@@ -319,7 +318,7 @@ test("installed loader honors all independent options and their enabled defaults
 
 test("installed loader reads private rules, supports the off switch and never retries a blocked request", async t => {
   const dir = await directory(t);
-  for (const file of ["index.mjs", "request.mjs", "body-inspection.mjs", "response.mjs", "content-filter.mjs"]) await copyFile(new URL("../src/" + file, import.meta.url), join(dir, file));
+  await copyRuntimeModules(dir);
   await writeFile(join(dir, "content-filter.local.json"), JSON.stringify({ terms: ["private-term"] }));
   const plugin = (await import(pathToFileURL(join(dir, "index.mjs")).href)).default;
   const originalFetch = globalThis.fetch; t.after(() => { globalThis.fetch = originalFetch; });

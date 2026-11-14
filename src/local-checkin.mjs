@@ -9,6 +9,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { setTimeout as sleep } from "node:timers/promises";
 import { currentWindowsTrustee, isPrivateWindowsAcl } from "./windows-acl.mjs";
+import { checkinOf } from "./account-services.mjs";
 
 const DAY = 24 * 60 * 60 * 1000;
 // The tool lives in src/, so the checkout it must never store credentials in
@@ -188,8 +189,7 @@ export async function status(home = defaultHome()) {
 }
 
 async function defaultCheckin(auth) {
-  const { default: plugin } = await import("./index.mjs");
-  return (await plugin()).auth.checkin(async () => auth, {});
+  return checkinOf(async () => auth, {});
 }
 
 export async function runOnce(home = defaultHome(), { now = Date.now, checkin = defaultCheckin } = {}) {
