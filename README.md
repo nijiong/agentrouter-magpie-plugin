@@ -62,7 +62,9 @@ docker exec -it magpie magpie plugin login agentrouter
 # 非 Docker 环境直接运行：magpie plugin login agentrouter
 ```
 
-登录流程：**站点账号 → 站点密码 →（多把 Key 时）模型 Key ID**。插件以账号密码调用 `POST /api/user/login`，用返回的登录会话只读查找账号下已有的模型 Key（候选须启用、非空、未掩码、未过期；多把时按填写的 Key ID 读取），随成功认证保存模型 Key 与会话。模型调用本身只认模型 Key，密码与会话不能用于 `/v1` 请求。
+登录流程：**站点账号 → 站点密码 →（多把 Key 时）从列表中选择一把模型 Key**。插件以账号密码调用 `POST /api/user/login`，用返回的登录会话只读列出账号下已有的模型 Key（候选须启用、非空、未掩码、未过期）：只有一把时自动选用；有多把时逐一列出（名称 + 掩码后的 Key，不显示完整 Key），由你选择要用的那把，随成功认证保存模型 Key 与会话。模型调用本身只认模型 Key，密码与会话不能用于 `/v1` 请求。
+
+> 多 Key 选择列表需要较新的 magpie 宿主（支持登录方法自带提问的 `ask` 钩子与免原生 Key 表单的 `keyAsked`，2026-11-10 之后的版本）。旧宿主请先升级 magpie；不支持 `ask` 的宿主只询问账号密码，账号下有多把 Key 时登录会失败并提示重新登录选择。
 
 - 插件不创建、轮换或修改任何 Key；没有唯一候选时不代选、不补页、不重试，也不以空 key 宣告成功。
 - 保存凭据 ≠ 模型验证可用；按下一节运行模型测试。
@@ -108,7 +110,7 @@ docker exec magpie magpie quota agentrouter
 
 | 方式（唯一） | 首次需要填写 | 保存后的边界 |
 |---|---|---|
-| **账号密码登录** | 站点账号、站点密码（均需手动输入）、可选的模型 Key ID | 登录成功后只读查找唯一已有模型 key；密码与会话不能用于模型调用 |
+| **账号密码登录** | 站点账号、站点密码（均需手动输入）；多把 Key 时从列表选择一把 | 登录成功后只读列出已有模型 key：唯一时自动选用，多把时由你选择；密码与会话不能用于模型调用 |
 
 所有请求固定发往 `https://ps.air-outer.com`；本定制版已移除国际站与其他登录入口。
 
@@ -365,7 +367,7 @@ SSE 仍只观察首个有效内容或未知事件之前最多 **64 KiB / 15 秒*
 - **保存不等于验证**：保存后运行 `magpie provider test agentrouter`，再判断模型是否可用。宿主已登录和余额可读都不是模型验证结果。
 - **本地 `400 agentrouter_missing_api_key`**：loader 遇到缺失 key 或保留占位 key，在任何网络请求前返回。重新执行账号密码登录读取模型 Key 后再测。
 - **旧配置端点误填 key**：`endpoint` 应为 HTTP(S) 地址。既有端点校验回退能力保留；如需手动修正，先备份，不要把 key 或其他凭据写入 URL。
-- **查 key 不确定**：没有唯一可用候选或列表分页不完整时，按站点「令牌」页的 ID 列填写目标 Key ID 后重新登录；不自动创建、轮换、重试或保存空 key。
+- **查 key 不确定**：没有可用候选或列表分页不完整时登录失败并给出提示；多把可用 Key 时在登录中列出供你选择。不自动创建、轮换、重试或保存空 key。
 
 ## 账号密码登录怎么走
 
@@ -373,22 +375,14 @@ SSE 仍只观察首个有效内容或未知事件之前最多 **64 KiB / 15 秒*
 
 1. 以表单中你输入的账号密码 `POST https://ps.air-outer.com/api/user/login`
 2. 从响应头提取 `Set-Cookie: session=…`，并读取用户记录（`id`、`quota`、`checked_in`）
-3. 用该会话与用户 ID 调 `GET /api/token/`（或填写 Key ID 时 `GET /api/token/{id}`）查找已有模型密钥；仅接受去重后的唯一启用、非空、未掩码、未过期候选
-4. 保存模型 Key、会话、用户 ID 与账号密码到账号 metadata；多个候选或分页不完整等不确定结果均失败并提示填写 Key ID，不自动补页重试、创建或轮换密钥
+3. 用该会话与用户 ID 调 `GET /api/token/` 列出已有模型密钥；仅接受启用、非空、未掩码、未过期的候选并按实际 key 去重
+4. 唯一候选自动选用；多把候选在登录中逐一列出（名称 + 掩码 Key）由你选择；保存模型 Key、会话、用户 ID 与账号密码到账号 metadata。无候选或分页不完整等不确定结果均失败，不自动补页重试、创建或轮换密钥
 
 签到 hook 与本地工具重复第 1 步完成每日签到；余额读取优先用已保存会话请求 `/api/user/self`，失败再回落到密码登录与消耗接口。
 
 ## 改请求头（不用重新登录）
 
-[维护脚本](<set-ar-headers.sh>)只输出固定成功提示，不回显请求头内容。但命令行参数仍可能进入 shell 历史或进程列表，因此该入口只适合非敏感客户端标识头；不要用它传入 Authorization、Cookie 或其他凭据。
-
-```bash
-./set-ar-headers.sh 'User-Agent: codex_cli_rs/0.101.0'
-./set-ar-headers.sh ''          # 清空，回到默认
-```
-
-脚本默认读 `<magpie 配置目录>/magpie/plugin-auth.json`（Docker 部署常见为
-`/opt/magpie/config/magpie/plugin-auth.json`），用 `AUTH_FILE` 覆盖。
+自定义请求头保存在账号的 `metadata.headers`（手动配置，见下一节格式），修改后重启 magpie 生效，无需重新登录。备份后只改这一个字段，保持既有 key、密码与其他字段不变；也不要把 Authorization、Cookie 或其他凭据写进这里。
 
 四层覆盖（后者覆盖前者）：插件默认 → 模型配置 `provider.models[*].headers` → provider 级 `provider.headers` → 账号级 `metadata.headers`。当前实现先按枚举顺序汇总该 provider 的模型头，同名项由后面的模型覆盖；这不是按当前请求模型隔离的设置。模型层接受对象，provider 与账号层接受上述多行文本；宿主界面名称及配置映射以其版本为准。
 
@@ -465,7 +459,6 @@ docker exec magpie magpie plugin options word-guard '{
 
 ```bash
 npm test                 # Node.js 插件与本地签到回归
-npm run test:headers     # 需要 Python 3；仅执行维护脚本的 Python 部分，不调用 Docker
 ```
 
 ## 目录结构
@@ -479,8 +472,7 @@ npm run test:headers     # 需要 Python 3；仅执行维护脚本的 Python 部
 - [src/content-filter.mjs](<src/content-filter.mjs>) — 本地词表加载与替换；示例见 [src/content-filter.example.json](<src/content-filter.example.json>)
 - [src/local-checkin.mjs](<src/local-checkin.mjs>) — 独立本地签到工具；权限检查见 [src/windows-acl.mjs](<src/windows-acl.mjs>)
 - `package.json` — 包描述（`main` / `exports` 指向 `src/index.mjs`）
-- `set-ar-headers.sh` — 改请求头的小工具
-- `test/` — 全部回归测试（`npm test` 运行；`test/set-ar-headers.test.py` 由 `npm run test:headers` 运行）
+- `test/` — 全部回归测试（`npm test` 运行）
 - `test/usage.test.mjs` — 额度读取、登录与 HTTP 错误回归测试
 - `test/loader-stream.test.mjs` — 流内错误、空完成、成功字节、工具调用等回归测试
 - `test/response-bounds.test.mjs` — 有界缓存、检查超时与取消测试（统一运行 `npm test`）

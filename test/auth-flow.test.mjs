@@ -36,9 +36,10 @@ test("onboarding offers only the password sign-in", async () => {
   assert.deepEqual(p.auth.methods.map(m => m.type), ["api"]);
   const method = p.auth.methods[0];
   assert.equal(method.label, "账号密码登录");
-  assert.deepEqual(method.prompts.map(p => p.key), ["username", "password", "modelKeyId"]);
+  assert.deepEqual(method.prompts.map(p => p.key), ["username", "password"]);
   assert.equal(method.prompts[0].type, "text");
   assert.equal(method.prompts[1].type, "password");
+  assert.equal(typeof method.ask, "function");
   assert.equal(Object.hasOwn(method.prompts[0], "default"), false);
   assert.equal(Object.hasOwn(method.prompts[1], "default"), false);
 });
@@ -105,7 +106,6 @@ for (const [label, payload, status = 200] of [
   ["SDK placeholder", { data: { items: [entry("agentrouter")] } }],
   ["documentation placeholder", { data: { items: [entry("YOUR_API_KEY")] } }],
   ["masked key", { data: { items: [entry("sk-****")] } }],
-  ["multiple different keys", { data: { items: [entry(), entry("another-real-key")] } }],
   ["page may be truncated", { data: { items: Array.from({ length: 50 }, () => entry()) } }],
   ["explicit additional page", { data: { total: 2, items: [entry()] } }],
   ["invalid total", { data: { total: "1", items: [entry()] } }],

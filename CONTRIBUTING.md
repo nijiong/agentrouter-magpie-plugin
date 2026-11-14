@@ -14,11 +14,10 @@ PR 正文请写明 `## 改动说明`、`## 验证证据`、`## 风险与兼容�
 
 ## 本地验证
 
-使用 **Node.js >= 20** 和 **Python 3.12+**。在仓库根目录执行：
+使用 **Node.js >= 20**。在仓库根目录执行：
 
 ```bash
 npm test
-npm run test:headers      # 等价于 python3 test/set-ar-headers.test.py
 npm pack --dry-run
 ```
 

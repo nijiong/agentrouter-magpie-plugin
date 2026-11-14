@@ -48,7 +48,7 @@ test('password sign-in saves the login session and reads the existing key', asyn
 });
 
 test('Endpoint onboarding is absent and a previously misplaced key stays ignored', async () => {
-  assert.deepEqual(apiMethod(plugin).prompts.map(p => p.key), ["username", "password", "modelKeyId"]);
+  assert.deepEqual(apiMethod(plugin).prompts.map(p => p.key), ["username", "password"]);
 
   const { calls } = await readUsage(
     { key: 'sk-example', metadata: { endpoint: 'sk-example', username: 'example', password: 'example' } },

@@ -24,21 +24,75 @@ const loginResponses = () => [
   raw({ success: true, data: { id: 42, checked_in: true } }, { "Set-Cookie": "session=synthetic-site; Path=/; HttpOnly" }),
   raw({ success: true, data: { items: [{ status: 1, key: "synthetic-api-key" }] } }),
 ];
+const twoKeys = () => [
+  loginResponses()[0],
+  raw({ success: true, data: { items: [{ status: 1, key: "synthetic-one", name: "first" }, { status: 1, key: "synthetic-two", name: "second" }] } }),
+];
 
-test("first login collects site, account, password and optional key choice", async () => {
+test("first login collects account and password, then offers a key choice only when needed", async () => {
   const p = await plugin({ magpie: {} });
   assert.deepEqual(p.auth.methods.map(m => m.type), ["api"]);
   const method = p.auth.methods[0];
-  assert.deepEqual(method.prompts.map(p => p.key), ["username", "password", "modelKeyId"]);
+  assert.deepEqual(method.prompts.map(p => p.key), ["username", "password"]);
   assert.equal(method.prompts[0].type, "text");
   assert.equal(method.prompts[1].type, "password");
   assert.equal(method.prompts[0].validate("site-user"), undefined);
   assert.ok(method.prompts[0].validate(" "));
   assert.equal(method.prompts[1].validate("site-pass"), undefined);
   assert.ok(method.prompts[1].validate(""));
-  assert.equal(method.prompts[2].validate("15"), undefined);
-  assert.equal(method.prompts[2].validate(""), undefined);
-  for (const bad of ["0", "1.5", "abc"]) assert.ok(method.prompts[2].validate(bad), `key id ${bad} accepted`);
+  assert.equal(typeof method.ask, "function");
+  assert.deepEqual(await method.ask(undefined), method.prompts[0]);
+  assert.deepEqual(await method.ask({ username: "site-user" }), method.prompts[1]);
+});
+
+test("ask lists several keys by name and masked key, once per sign-in", async () => {
+  const method = (await plugin()).auth.methods[0];
+  await stubFetch(twoKeys(), async calls => {
+    const inputs = { username: "site-user", password: "site-pass" };
+    const choice = await method.ask(inputs);
+    assert.equal(choice.type, "select");
+    assert.equal(choice.key, "modelKeyIndex");
+    assert.deepEqual(choice.options.map(o => o.value), ["0", "1"]);
+    assert.ok(choice.options.every(o => o.label.includes("…")));
+    assert.ok(choice.options[0].label.includes("first"));
+    assert.ok(choice.options[1].label.includes("second"));
+    for (const secret of ["synthetic-one", "synthetic-two", "site-pass"]) {
+      assert.ok(!JSON.stringify(choice).includes(secret));
+    }
+    // Repeated asks (a redraw or retry) reuse the one login and list read.
+    assert.deepEqual(await method.ask(inputs), choice);
+    assert.equal(calls.length, 2);
+    assert.equal(await method.ask({ ...inputs, modelKeyIndex: "1" }), null);
+    assert.equal(calls.length, 2);
+    const result = await method.authorize({ ...inputs, modelKeyIndex: "1" });
+    assert.equal(result.type, "success");
+    assert.equal(result.key, "synthetic-two");
+    assert.equal(calls.length, 2);
+  });
+});
+
+test("ask asks no key question when the account has a single usable key", async () => {
+  const method = (await plugin()).auth.methods[0];
+  await stubFetch(loginResponses(), async calls => {
+    const inputs = { username: "site-user", password: "site-pass" };
+    assert.equal(await method.ask(inputs), null);
+    const result = await method.authorize(inputs);
+    assert.equal(result.type, "success");
+    assert.equal(result.key, "synthetic-api-key");
+    assert.equal(calls.length, 2);
+  });
+});
+
+test("ask stops at a refused login without asking anything further", async () => {
+  const method = (await plugin()).auth.methods[0];
+  await stubFetch([raw({ success: false, message: "用户名或密码错误" })], async calls => {
+    const inputs = { username: "site-user", password: "site-pass" };
+    assert.equal(await method.ask(inputs), null);
+    const result = await method.authorize(inputs);
+    assert.equal(result.type, "failed");
+    assert.match(result.error, /核对用户名和密码/);
+    assert.equal(calls.length, 1);
+  });
 });
 
 test("password sign-in rejects missing credentials locally without a request", async () => {
@@ -101,7 +155,6 @@ test("password sign-in key-read failures never echo the session or save a key", 
   const method = (await plugin()).auth.methods[0];
   for (const [response, said] of [
     [raw({ success: true, data: { items: [] } }), "未找到"],
-    [raw({ success: true, data: { items: [{ status: 1, key: "synthetic-one" }, { status: 1, key: "synthetic-two" }] } }), "模型 Key ID"],
     [raw({ success: false, message: "synthetic-private rejected" }), "拒绝"],
     [new Response("<html>synthetic-private</html>", { status: 403 }), "验证页"],
   ]) {
@@ -116,25 +169,36 @@ test("password sign-in key-read failures never echo the session or save a key", 
   }
 });
 
-test("password sign-in reads a named key alone when the account has several", async () => {
+test("without a choice among several keys the sign-in fails asking to pick one", async () => {
   const method = (await plugin()).auth.methods[0];
-  await stubFetch([loginResponses()[0], raw({ success: true, data: { id: 9, status: 1, key: "synthetic-two" } })], async calls => {
-    const result = await method.authorize({ username: "site-user", password: "site-pass", modelKeyId: "9" });
-    assert.equal(result.type, "success");
-    assert.equal(result.key, "synthetic-two");
+  await stubFetch(twoKeys(), async calls => {
+    const result = await method.authorize({ username: "site-user", password: "site-pass" });
+    assert.equal(result.type, "failed");
+    assert.match(hostFailed(result).error, /选择/);
+    assert.equal("key" in result, false);
     assert.equal(calls.length, 2);
-    assert.equal(calls[1].url, "https://ps.air-outer.com/api/token/9");
   });
 });
 
-test("invalid Key IDs fail before any request", async () => {
+test("an out-of-range or malformed key choice fails without saving a key", async () => {
   const method = (await plugin()).auth.methods[0];
-  for (const modelKeyId of ["../other", "9/child", "0", "-1", "1.5", "abc"]) {
-    await stubFetch([], async calls => {
-      const result = await method.authorize({ username: "site-user", password: "site-pass", modelKeyId });
+  for (const modelKeyIndex of ["2", "-1", "1.5", "abc", "../other", ""]) {
+    await stubFetch(twoKeys(), async calls => {
+      const result = await method.authorize({ username: "site-user", password: "site-pass", modelKeyIndex });
       assert.equal(result.type, "failed");
-      assert.match(hostFailed(result).error, /模型 Key ID/);
-      assert.equal(calls.length, 0);
+      assert.match(hostFailed(result).error, /所选模型 Key 无效/);
+      assert.equal("key" in result, false);
+      assert.equal(calls.length, 2);
     });
   }
+});
+
+test("the first key is taken when the choice answers 0", async () => {
+  const method = (await plugin()).auth.methods[0];
+  await stubFetch(twoKeys(), async calls => {
+    const result = await method.authorize({ username: "site-user", password: "site-pass", modelKeyIndex: "0" });
+    assert.equal(result.type, "success");
+    assert.equal(result.key, "synthetic-one");
+    assert.equal(calls.length, 2);
+  });
 });

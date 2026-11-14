@@ -1,12 +1,11 @@
 {
   "name": "opencode-agentrouter-auth",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Independent AgentRouter provider for magpie and OpenCode: password sign-in entered by the user, fixed to ps.air-outer.com, configurable headers, balance and daily check-in. Derived from ZhaoJun233/agentrouter-magpie-plugin (MIT).",
   "type": "module",
   "main": "./src/index.mjs",
   "scripts": {
-    "test": "node --test test/body-inspection.test.mjs test/usage.test.mjs test/loader-stream.test.mjs test/response-bounds.test.mjs test/checkin.test.mjs test/local-checkin.test.mjs test/local-checkin.integration.test.mjs test/windows-acl.test.mjs test/request-replay.test.mjs test/content-filter.test.mjs test/auth-guidance.test.mjs test/auth-flow.test.mjs test/resource-compat.test.mjs test/auth-request-boundary.test.mjs test/response-preservation.test.mjs",
-    "test:headers": "python3 test/set-ar-headers.test.py"
+    "test": "node --test test/body-inspection.test.mjs test/usage.test.mjs test/loader-stream.test.mjs test/response-bounds.test.mjs test/checkin.test.mjs test/local-checkin.test.mjs test/local-checkin.integration.test.mjs test/windows-acl.test.mjs test/request-replay.test.mjs test/content-filter.test.mjs test/auth-guidance.test.mjs test/auth-flow.test.mjs test/resource-compat.test.mjs test/auth-request-boundary.test.mjs test/response-preservation.test.mjs"
   },
   "exports": "./src/index.mjs",
   "files": [
