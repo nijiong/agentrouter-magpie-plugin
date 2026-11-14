@@ -74,11 +74,12 @@ loader 对缺失 key 或保留占位 key 在网络前返回本地 `400 agentrout
 
 ## 4. 选项组合：关闭内联不等于关闭过滤
 
-提供商编辑器保留原有选项和默认值：
+提供商编辑器保留原有选项和默认值（界面文案已提供中文，英文界面显示英文原名）：
 
-- `portable-responses`：**Replay complete Responses items inline**，默认开启。
-- `text-filter`：**Filter configured prose before sending**，默认开启，但没有本地词表或 `terms` 为空时不替换正文。
-- `send-codex-headers`：**Send the Codex client headers**，默认开启，与上述两个正文选项独立。
+- `portable-responses`：**内联回放完整的 Responses 消息**（Replay complete Responses items inline），默认开启。
+- `text-filter`：**发送前过滤配置的文本**（Filter configured prose before sending），默认开启，但没有本地词表或 `terms` 为空时不替换正文。
+
+Codex 客户端请求头不再是开关：网关只认它自己的客户端标识，默认始终发送，需要别的可用标识时通过请求头配置层覆盖 `User-Agent`。
 
 | `portable-responses` | `text-filter` | 请求正文行为 |
 | --- | --- | --- |

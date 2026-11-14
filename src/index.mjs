@@ -13,8 +13,7 @@ import { loadTextFilter } from "./content-filter.mjs";
 //    So the request headers are not cosmetic here: they are what gets the key
 //    through, and the one that works is the vendor's own client's. They are
 //    configurable — per provider and per account — and the default is that
-//    client's. The provider's own switch turns that default off, for a user
-//    who would rather send exactly the headers they named.
+//    client's, always sent unless the user's own header block overrides it.
 //
 // 2. It has no daily check-in to call. The site is a New API deployment,
 //    and most New API sites put one on GET /api/user/checkin. This one
@@ -80,14 +79,6 @@ const DECLARED_MODELS = {
   "gpt-6-astra": "GPT-6 Astra",
   "gpt-6.1-sol": "GPT-6.1 Sol",
 };
-
-// codexHeaders is whether requests are sent as a Codex CLI's, as the
-// provider's own switch has it. The switch is the vendor's whitelist made
-// optional: off, only the headers the user gave are sent. It is read from the
-// host when the plugin loads (magpie hands the reader over as input.magpie),
-// and defaults to on — including on a host too old to have the switch, which
-// is why the option is checked for rather than assumed.
-let codexHeaders = () => true;
 
 const REQUEST_TIMEOUT = 30_000;
 
@@ -237,12 +228,11 @@ function modelHeaders(provider) {
 // headersOf is what a request to the vendor is sent with, lowest to highest:
 // the defaults, the provider's own block (its models' headers, which the
 // editor keeps), and the account's own, each overriding the one before it.
-//
-// The Codex User-Agent is the switch's business; Accept is not a client
-// claim, so it stays whatever the switch says.
+// The Codex User-Agent is the client the gateway admits; a user with another
+// working one overrides it in their own header block.
 function headersOf(provider, auth) {
   return {
-    ...(codexHeaders() ? { "User-Agent": DEFAULT_HEADERS["User-Agent"] } : {}),
+    "User-Agent": DEFAULT_HEADERS["User-Agent"],
     Accept: DEFAULT_HEADERS.Accept,
     ...modelHeaders(provider),
     ...parseHeaders(provider?.headers),
@@ -834,10 +824,7 @@ async function modelsOf(provider, { auth } = {}) {
 
 export const AgentRouterAuthPlugin = async (input) => {
   // The host hands over its reader for the provider's switches; an older one
-  // has none, and the Codex headers stay on there (README, "为什么需要自定义
-  // 请求头"). Reading it through a closure keeps headersOf's own signature —
-  // provider and account — which every caller already passes.
-  codexHeaders = () => input?.magpie?.option?.(PROVIDER, "send-codex-headers") !== false;
+  // has none, and both body options stay on there.
   const portableResponses = () => input?.magpie?.option?.(PROVIDER, "portable-responses") !== false;
   const textFilterEnabled = () => input?.magpie?.option?.(PROVIDER, "text-filter") !== false;
   return {
@@ -949,25 +936,24 @@ export const AgentRouterAuthPlugin = async (input) => {
       usage: usageOf,
       checkin: checkinOf,
 
-      // Switches the user can turn on the provider's editor.
+      // Switches the user can turn on the provider's editor. The words are
+      // Chinese beside the English maps, so magpie shows them in the
+      // window's own language (options' labels/descriptions).
       options: [
         {
           key: "text-filter",
-          label: "Filter configured prose before sending",
+          label: "发送前过滤配置的文本",
+          labels: { zh: "发送前过滤配置的文本", en: "Filter configured prose before sending" },
           default: true,
-          description: "Uses content-filter.local.json; no guessed terms. Preserves recognized Markdown code, tool data and encrypted state. Reload after editing rules.",
+          description: "使用 content-filter.local.json 词表，不猜测词条；保留识别出的 Markdown 代码、工具数据与加密状态。编辑规则后需重新加载插件。",
+          descriptions: { zh: "使用 content-filter.local.json 词表，不猜测词条；保留识别出的 Markdown 代码、工具数据与加密状态。编辑规则后需重新加载插件。", en: "Uses content-filter.local.json; no guessed terms. Preserves recognized Markdown code, tool data and encrypted state. Reload after editing rules." },
         },
         {
           key: "portable-responses",
-          label: "Replay complete Responses items inline",
-          description: "Remove resource-local IDs only when inline content is available; preserve call_id and encrypted content. Reference-only history still requires the original resource. Off disables ID replay only; text-filter is independent.",
-          default: true,
-        },
-        {
-          key: "send-codex-headers",
-          label: "Send the Codex client headers",
-          description:
-            "AgentRouter's gateway only answers clients it recognises. On, requests are sent as a Codex CLI's; off, only the headers you gave are sent.",
+          label: "内联回放完整的 Responses 消息",
+          labels: { zh: "内联回放完整的 Responses 消息", en: "Replay complete Responses items inline" },
+          description: "仅在内联正文完整时移除资源本地 ID；保留 call_id 与加密内容。只有服务端引用的历史仍需原资源。关闭仅停用 ID 回放，文本过滤独立生效。",
+          descriptions: { zh: "仅在内联正文完整时移除资源本地 ID；保留 call_id 与加密内容。只有服务端引用的历史仍需原资源。关闭仅停用 ID 回放，文本过滤独立生效。", en: "Remove resource-local IDs only when inline content is available; preserve call_id and encrypted content. Reference-only history still requires the original resource. Off disables ID replay only; text-filter is independent." },
           default: true,
         },
       ],

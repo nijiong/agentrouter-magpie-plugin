@@ -11,6 +11,8 @@
 - 候选过滤与不确定处理不变：启用、非空、未掩码、未过期，按实际 key 去重；无候选、列表不完整或未知形状仍失败，不代选、不补页、不重试、不创建或轮换 Key。
 - 兼容边界：多 Key 选择需要支持 `ask` 钩子的较新 magpie 宿主（2026-11-10 之后的版本，同时依赖 `keyAsked` 免原生 Key 表单）。不支持 `ask` 的宿主只询问账号密码，多把 Key 时登录失败并提示重新登录选择。
 - 移除 Python 维护工具：删除 `set-ar-headers.sh`（内嵌 Python 的改请求头脚本）与 `test/set-ar-headers.test.py`，移除 `npm run test:headers`。仓库不再包含 Python 代码，开发与验证只需 Node.js；自定义请求头改为按 README 手动维护账号 `metadata.headers`。
+- 提供商开关的界面文案改为中文（发送前过滤配置的文本 / 内联回放完整的 Responses 消息），并通过 `labels` / `descriptions` 提供 zh、en 多语言，随宿主窗口语言显示；开关键名与默认值不变。
+- 移除 `send-codex-headers` 开关：Codex 客户端请求头改为始终默认发送（网关只认自家客户端标识），需要其他标识时用请求头配置层覆盖 `User-Agent`。宿主里已保存的该开关取值不再生效，无需迁移。
 
 ## 0.1.9 — 2026-11-13
 

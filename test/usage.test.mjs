@@ -57,31 +57,20 @@ test('Endpoint onboarding is absent and a previously misplaced key stays ignored
   assert.equal(calls[1].url, 'https://ps.air-outer.com/v1/dashboard/billing/usage');
 });
 
-test('The Codex headers are sent unless the provider switch is turned off', async () => {
-  // On — and on a host too old to offer the switch — the gateway sees the
-  // client it admits. Off, the user's own headers are all that go.
-  const withSwitch = (on) => AgentRouterAuthPlugin({ magpie: { option: () => on } });
-  try {
-    assert.equal(_internal.headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
+test('The Codex headers are always sent unless the user overrides them', async () => {
+  // The gateway only admits its own client, so the Codex User-Agent is a
+  // default, not a switch. A user with another working identity overrides
+  // it in their own header block.
+  assert.equal(_internal.headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
+  assert.equal(_internal.headersOf({}, {}).Accept, 'application/json');
+  assert.equal(
+    _internal.headersOf({}, { metadata: { headers: 'User-Agent: mine' } })['User-Agent'],
+    'mine',
+  );
 
-    await withSwitch(false);
-    const off = _internal.headersOf({}, {});
-    assert.equal(off['User-Agent'], undefined);
-    assert.equal(off.Accept, 'application/json');
-    assert.equal(
-      _internal.headersOf({}, { metadata: { headers: 'User-Agent: mine' } })['User-Agent'],
-      'mine',
-    );
-
-    await withSwitch(true);
-    assert.equal(_internal.headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
-
-    // A host from before the switch hands over no reader at all.
-    await AgentRouterAuthPlugin();
-    assert.equal(_internal.headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
-  } finally {
-    await withSwitch(true);
-  }
+  // A host from before options hands over no reader at all; same default.
+  await AgentRouterAuthPlugin();
+  assert.equal(_internal.headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
 });
 
 test('A retired model is never advertised back, whichever path lists it', async () => {
