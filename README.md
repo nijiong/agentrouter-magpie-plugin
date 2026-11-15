@@ -425,12 +425,16 @@ SSE 仍只观察首个有效内容或未知事件之前最多 **64 KiB / 15 秒*
 
 ```bash
 docker exec magpie magpie quota | grep -i agentrouter
-#   agentrouter · example-user · API key …XXXX   subscription  Balance 25% ($150.00 / $200.00)
+#   agentrouter · example-user · API key …XXXX   subscription  $150.00 · Balance 25%
 #   上述为虚构示例；实际输出也可能提示“累计消耗…；剩余额度未知”。
 ```
 
-`Balance` 里的百分比是 magpie 的 `Used` 字段（剩余 = 100 − 已用），金额在 `Amount` / `Limit`。
+`Balance` 窗口只声明百分比：`Used` 为已用占比，剩余 = 100 − 已用；顶部 `balance` 单独给出剩余金额（如 `$150.00`）。
 **不要把美元金额塞进 `Used`** —— 例如把 $250 当成 250%，会使剩余被截成 0%。
+
+窗口也**不再声明金额计数**（`Amount` / `Limit` / `Unit`，或货币形式的 `"x / y"` display）。
+凡是同时给出金额计数的窗口，magpie 会按自己的两次读数逐日累计，并在卡片上显示“每天花掉的金额”；
+只声明占比可避免这一行。金额由 `balance` 表达，随账号余额展示。
 
 ## 额外的本地拒绝策略（可选社区中间件）
 

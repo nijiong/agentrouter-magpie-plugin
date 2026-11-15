@@ -1,9 +1,8 @@
 import { readCloneText } from "./body-inspection.mjs";
 
-// Some relays commit HTTP 200 before they know whether a model can answer.
-// Inspect only the bounded SSE prelude, before any answer or tool call escapes.
-// Success (including its original bytes), unknown events, and late failures pass
-// through. Never retry here: magpie owns routing, the caller owns cancellation.
+// 少数中转会在尚不确定模型能否作答前就提交 HTTP 200。此处只检查有界的 SSE 前导，
+// 早于任何作答或工具调用逸出。成功（含其原始字节）、未知事件与迟到的失败均原样放行。
+// 此处绝不重试：路由归 magpie，取消归调用方。
 const PRELUDE_BYTES = 64 * 1024;
 const PRELUDE_MS = 15_000;
 const TOKEN_RATE_LIMIT = /exceeded\s+token\s+rate\s+limit/i;
@@ -51,14 +50,14 @@ function errorDetail(value, depth = 0) {
   let encoded;
   try { encoded = JSON.parse(message); } catch { return detail; }
   const nested = errorDetail(encoded, depth + 1);
-  // Exhaustion or an invalid encoded detail is not permission to use a partial parent.
+  // 编码细节用尽或非法时，不得改用残缺的父级。
   return inheritErrorStatus(value, nested);
 }
 
 function changedHeaders(original) {
   const h = new Headers(original);
   h.set("content-type", "application/json");
-  // Fetch exposes decoded bytes, and the new body has a different length.
+  // Fetch 暴露的是解码后的字节，且新正文长度不同。
   for (const k of ["content-length", "content-encoding", "transfer-encoding", "etag", "content-md5", "digest"]) h.delete(k);
   return h;
 }
@@ -178,9 +177,8 @@ function hasChatOutput(choice) {
     (choice.logprobs !== undefined && choice.logprobs !== null);
 }
 
-// null means harmless prelude; true means release unchanged; Response is an
-// explicit early failure. Looking only in error envelopes avoids matching text
-// in a perfectly good answer that quotes an error message.
+// null 表示无害前导；true 表示原样放行；Response 表示显式提前失败。
+// 只在错误信封中查找，避免命中一段完好回答里引用的错误文本。
 function inspectEvent(frame, headers) {
   const lines = frame.split(/\r\n|\n|\r/);
   let name;
@@ -189,7 +187,7 @@ function inspectEvent(frame, headers) {
     const colon = line.indexOf(":");
     const field = colon < 0 ? line : line.slice(0, colon);
     const value = colon < 0 ? "" : line.slice(colon + 1).replace(/^ /, "");
-    if (field === "event") name = value; // SSE uses the last field, including an empty one.
+    if (field === "event") name = value; // SSE 取最后一个字段，空值也算。
     if (field === "data") dataLines.push(value);
   }
   const data = dataLines.join("\n");
@@ -216,13 +214,13 @@ function inspectEvent(frame, headers) {
         r.usage?.input_tokens === 0 && r.usage?.output_tokens === 0) return emptyResponse(headers);
     return true;
   }
-  if (Array.isArray(j.choices)) return null; // known chat role-only/usage prelude
+  if (Array.isArray(j.choices)) return null; // 已知的 chat 仅角色/用量前导
   if (["response.created", "response.in_progress", "response.output_item.added", "response.output_item.done", "response.content_part.added"].includes(type)) return null;
-  return true; // unknown protocol or event: fail open, not data loss
+  return true; // 未知协议或事件：放行而非丢数据
 }
 
-// CR ends a line immediately; a following LF (even in the next chunk) belongs
-// to that same ending. This also handles legal mixed newline event separators.
+// CR 立即结束一行；紧随的 LF（即使在下一块中）属于同一个行结束。
+// 这也覆盖合法的混合换行事件分隔符。
 function eventScanner(headers) {
   let line = "", lines = [], afterCR = false;
   return text => {
@@ -249,8 +247,7 @@ async function inspectStream(res) {
   let bytes = 0, inflight, timer;
   const expired = new Promise(resolve => { timer = setTimeout(() => resolve(null), PRELUDE_MS); });
   const cancel = reason => { void reader.cancel(reason).catch(() => {}); };
-  // Keep the in-flight read if the inspection deadline expires. A fresh read
-  // would skip that chunk; a tee/clone would buffer an unbounded unused branch.
+  // 检查超时后保留已发起的读取：重新读取会跳过该分块，tee/clone 会缓冲无人消费的分支。
   try {
     while (true) {
       inflight = reader.read();
@@ -295,8 +292,7 @@ export async function explainResponse(res) {
   const type = res.headers.get("content-type") ?? "";
   if (res.status === 200 && /text\/event-stream/i.test(type)) return inspectStream(res);
   if (![200, 400, 429].includes(res.status)) return res;
-  // JSON success responses can also carry an error envelope. Ordinary successful
-  // replies, unknown failures and non-JSON content remain untouched.
+  // JSON 成功响应也可能携带错误信封；普通成功回复、未知失败与非 JSON 内容保持原样。
   if (res.status === 200 && !/\bjson\b/i.test(type)) return res;
   const text = await readCloneText(res, { maxBytes: 64 * 1024, timeoutMs: 2000 });
   if (text === null) return res;

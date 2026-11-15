@@ -2,8 +2,7 @@ import { redactResponsesBody } from "./content-filter.mjs";
 import { readCloneText } from "./body-inspection.mjs";
 import { isPlainMessage, isPlainTextPart } from "./responses-shapes.mjs";
 
-// Replay complete items inline instead of asking a load-balanced resource to
-// retrieve them by an old item ID. Never remove call_id or opaque contents.
+// 内联完整条目回放，避免依赖负载均衡资源按旧 ID 取回；call_id 与不透明内容一律保留。
 function isInlinePart(part) {
   if (!part || typeof part !== "object") return false;
   if (["input_text", "input_image", "input_file", "input_audio"].includes(part.type)) return true;
@@ -24,8 +23,7 @@ function hasInlineContent(item) {
     case "function_call_output":
       return typeof item.call_id === "string" && item.call_id.length > 0 &&
         (typeof item.output === "string" || Array.isArray(item.output));
-    // Reasoning IDs are required by the published input schema; encrypted
-    // state has no cross-resource portability guarantee. Preserve it intact.
+    // 推理条目的 ID 是输入 schema 的必填项，加密状态也不保证跨资源可移植：整体保留。
     case "reasoning":
       return false;
     default:
@@ -68,8 +66,7 @@ export async function prepareRequest(input, init = {}, { portableResponses = tru
 }
 
 function replayInline(body) {
-  // Pointers carry context we cannot retrieve. Filtering visible prose must not
-  // silently discard that context or turn a continuation into a new conversation.
+  // 指针类字段携带无法取回的上下文：过滤可见正文不得顺带丢弃它，也不得把续写变成新会话。
   if (!Array.isArray(body.input) || body.previous_response_id || body.conversation ||
       body.input.some(item => item?.type === "item_reference")) return false;
   let changed = false;
@@ -77,9 +74,8 @@ function replayInline(body) {
     if (!hasInlineContent(item) || !Object.hasOwn(item, "id")) continue;
     delete item.id;
     if (item.type === "message" || item.type == null) {
-      // Output-message input objects require an ID. Convert to the supported
-      // EasyInputMessage form, preserving phase and every actual text segment.
-      // Assistant history keeps output_text and its metadata; other roles use input_text.
+      // 输出消息作为输入时必须带 ID：改写为受支持的 EasyInputMessage 形式，
+      // 保留 phase 与每个文本段；assistant 历史保留 output_text 及其元数据，其他角色改用 input_text。
       delete item.status;
       if (item.role !== "assistant" && Array.isArray(item.content)) item.content = item.content.map(part =>
         part.type === "output_text" ? { type: "input_text", text: part.text } : part);

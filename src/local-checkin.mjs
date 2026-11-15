@@ -12,8 +12,7 @@ import { currentWindowsTrustee, isPrivateWindowsAcl } from "./windows-acl.mjs";
 import { checkinOf } from "./account-services.mjs";
 
 const DAY = 24 * 60 * 60 * 1000;
-// The tool lives in src/, so the checkout it must never store credentials in
-// is one level up.
+// 工具位于 src/，因此绝不能保存凭据的检出目录在其上一级。
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const RESULTS = new Set(["claimed", "done", "failed", "ineligible"]);
 class LocalError extends Error {
@@ -52,11 +51,11 @@ async function windowsPermissions(home, initialize) {
     if (initialize) {
       await exec(icacls, [home, "/grant:r", "*" + sid + ":(OI)(CI)F", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", "/inheritance:r"], options);
     }
-    // Native signed Windows utilities only; no execution-policy bypass or scripts.
-    // /save exports security descriptors, never file contents or credentials.
+    // 只用 Windows 自带的已签名工具，不做执行策略绕过、不用脚本。
+    // /save 导出安全描述符，绝不导出文件内容或凭据。
     temporary = await fs.mkdtemp(path.join(os.tmpdir(), "ar-acl-"));
-    // A native round-trip resolves aliases such as LA for this exact SID only.
-    // Never allow LA globally or infer local identity from a SID suffix.
+    // 原生往返只对这一个 SID 解析 LA 之类的别名；绝不在全局放行 LA，
+    // 也不从 SID 后缀推断本地身份。
     await exec(icacls, [temporary, "/grant:r", "*" + sid + ":(OI)(CI)F", "/inheritance:r"], options);
     const saved = path.join(temporary, "permissions.txt");
     await exec(icacls, [temporary, "/save", saved], options);
@@ -122,7 +121,7 @@ async function configuration(home) {
 
 async function credentials(home) {
   const config = await configuration(home);
-  // One "username:password" line; the password keeps any further colons.
+  // 一行 "用户名:密码"；密码保留后续的所有冒号。
   const text = (await readLocal(path.join(home, "credentials.txt"))).trim();
   const at = text.indexOf(":");
   const username = at > 0 ? text.slice(0, at).trim() : "";
@@ -145,7 +144,7 @@ async function readState(home) {
 }
 
 async function writeState(home, state) {
-  // Never write the auth object, response body, OAuth code or exception text.
+  // 绝不写入 auth 对象、响应正文、OAuth 授权码或异常文本。
   const temporary = path.join(home, ".state-" + randomUUID() + ".tmp");
   try {
     await fs.writeFile(temporary, JSON.stringify(state, null, 2) + "\n", { flag: "wx", mode: 0o600 });
@@ -203,14 +202,14 @@ export async function runOnce(home = defaultHome(), { now = Date.now, checkin = 
     const at = now();
     if (!Number.isSafeInteger(at) || at < 0 || !Number.isSafeInteger(at + DAY)) fail("INVALID_CLOCK");
     if (state && at < state.nextAttemptAt) return { outcome: "skipped", reason: "NOT_DUE" };
-    // Persist a fail-closed reservation BEFORE any network side effect.
+    // 在任何网络副作用之前，先持久化一条失败即关闭的预约记录。
     const pending = { version: 1, identity, lastAttemptAt: at, nextAttemptAt: at + DAY, paused: true, lastOutcome: "interrupted" };
     await writeState(home, pending);
     let outcome = "failed";
     try {
       const result = await checkin(auth);
       if (RESULTS.has(result?.outcome)) outcome = result.outcome;
-    } catch { /* Intentionally do not log exception text: it may contain secrets. */ }
+    } catch { /* 故意不记录异常文本：其中可能含有凭据。 */ }
     await writeState(home, { ...pending, paused: outcome !== "claimed" && outcome !== "done", lastOutcome: outcome });
     return { outcome };
   });
@@ -220,7 +219,7 @@ export async function resume(home = defaultHome()) {
   home = await homePath(home);
   return locked(home, async () => {
     const config = await configuration(home);
-    const previous = await readState(home); // Corrupt state must not be silently discarded.
+    const previous = await readState(home); // 损坏的状态不能被静默丢弃。
     const state = previous || { version: 1, lastAttemptAt: 0, nextAttemptAt: 0, lastOutcome: null };
     await writeState(home, { ...state, identity: config.site + ":" + config.userId, paused: false });
     return { resumed: true, networkRequested: false };

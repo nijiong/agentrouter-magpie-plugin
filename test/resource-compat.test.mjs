@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { prepareRequest, prepareResponsesRequest } from "../src/request.mjs";
 
 const url = "https://example.test/v1/responses";
-// Mirrors the gateway's completed output_text part, with no probability data.
+// 照搬网关已完成的 output_text 部分，不含概率数据。
 const message = (extra = {}) => ({
   id: "msg_resource_a", type: "message", role: "assistant", status: "completed", phase: "commentary",
   content: [{ type: "output_text", text: "Looking up the item", annotations: [], logprobs: [], ...extra }],
@@ -17,7 +17,7 @@ test("gateway output with empty logprobs replays on a different synthetic resour
   ] };
   const original = JSON.stringify(before);
   const init = { method: "POST", body: original, headers: { "content-length": String(original.length), "x-session-id": "keep-session" } };
-  // A deterministic substitute, not a real resource and not a replay of private history.
+  // 确定性的替身，不是真实资源，也不是私有历史的重放。
   let attempts = 0;
   const resourceB = async request => {
     attempts++;

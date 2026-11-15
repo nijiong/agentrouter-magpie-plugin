@@ -64,7 +64,7 @@ async function assertAbsent(path) {
   await assert.rejects(lstat(path), {code: "ENOENT"});
 }
 
-// Validation may reject or return a safe failure; it must never reach checkin.
+// 校验可以拒绝或返回安全失败，但绝不能抵达 checkin。
 async function assertClosed(home) {
   let calls = 0;
   let result;

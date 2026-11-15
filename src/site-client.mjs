@@ -1,15 +1,13 @@
-// Default origin; explicit endpoint/apiBase/siteURL overrides remain supported.
+// 默认站点；仍支持显式 endpoint/apiBase/siteURL 覆盖。
 export const ENDPOINT = "https://ps.air-outer.com";
 
-// What the vendor's own clients send. codex_cli_rs is what its gateway
-// admits; the rest are the headers a Codex CLI sends beside it.
+// 厂商自家客户端发送的请求头：网关只放行 codex_cli_rs，其余是 Codex CLI 同行的头。
 export const DEFAULT_HEADERS = {
   "User-Agent": "codex_cli_rs/0.101.0",
   Accept: "application/json",
 };
 
-// How many model keys one list read covers. A count at the page size means
-// the list was cut, not that the account has that many.
+// 一次列表读取覆盖的模型 Key 条数；数量正好等于页大小说明列表被截断，而非账号只有这些。
 const MODEL_KEY_PAGE_SIZE = 50;
 
 export const REQUEST_TIMEOUT = 30_000;
@@ -18,10 +16,8 @@ export function withTimeout(ms) {
   return AbortSignal.timeout(ms);
 }
 
-// parseHeaders turns the one-header-per-line text an account keeps into an
-// object. A line is "Name: value"; blank lines and lines starting with #
-// are skipped, so a block copied out of a browser's devtools works as it
-// is. A name repeated keeps its last value, as a Headers object would.
+// 把账号保存的「一行一个头」文本解析成对象：行为 "Name: value"，空行与 # 开头跳过，
+// 因此从 devtools 复制的整块可用；同名后者覆盖前者，与 Headers 行为一致。
 export function parseHeaders(text) {
   const out = {};
   for (const line of String(text ?? "").split(/\r?\n/)) {
@@ -36,11 +32,8 @@ export function parseHeaders(text) {
   return out;
 }
 
-// modelHeaders is the header block the provider's editor keeps on a model:
-// info() merges each model's `headers` from the plugin's config, and magpie's
-// provider editor writes the user's own there. It is the place a header can
-// be changed after sign-in without signing in again, so it is read here as
-// the provider's own block.
+// 模型层请求头：宿主把插件 config 里各模型的 headers 合并进来，provider 编辑器也写在这里，
+// 是登录后仍可改头的地方，故按 provider 自身的块读取。
 function modelHeaders(provider) {
   const models = provider?.models;
   if (!models || typeof models !== "object") return {};
@@ -51,11 +44,8 @@ function modelHeaders(provider) {
   return out;
 }
 
-// headersOf is what a request to the vendor is sent with, lowest to highest:
-// the defaults, the provider's own block (its models' headers, which the
-// editor keeps), and the account's own, each overriding the one before it.
-// The Codex User-Agent is the client the gateway admits; a user with another
-// working one overrides it in their own header block.
+// 请求发送时使用的头，优先级由低到高：默认值、provider 自身的块（含其模型头）、账号自身的块，后者覆盖前者。
+// Codex 的 User-Agent 是网关放行的客户端标识，用户可用自己的头覆盖。
 export function headersOf(provider, auth) {
   return {
     "User-Agent": DEFAULT_HEADERS["User-Agent"],
@@ -66,8 +56,7 @@ export function headersOf(provider, auth) {
   };
 }
 
-// applyHeaders sets headers on a Headers object, dropping any whose value is
-// empty so a user can take one off by clearing it.
+// 在 Headers 上写入请求头；值为空则删除，便于用户清空某项来移除它。
 export function applyHeaders(h, extra) {
   for (const [k, v] of Object.entries(extra)) {
     if (v === undefined || v === null || v === "") h.delete(k);
@@ -76,22 +65,14 @@ export function applyHeaders(h, extra) {
   return h;
 }
 
-// isURLish says whether a value can be a base URL at all: an http(s) address.
-// A stored endpoint is free text, so a key pasted there by an older build
-// lands in the same field as a real address does. Such a value is not an
-// endpoint however it was stored, and building a base out of it sends every
-// request to nothing at all, with no error to show for it.
+// 判断值是否可能作为基础 URL：须为 http(s) 地址。endpoint 是自由文本，
+// 旧版本误把 key 存进去时，用非地址拼出的 base 会让请求发往空目标且不报错。
 export function isURLish(v) {
   return /^https?:\/\/\S+$/i.test(String(v ?? "").trim());
 }
 
-// apiBase is the base completions go to. It follows the account's own
-// endpoint when it gave one, and otherwise the endpoint this plugin was built
-// for: ps.air-outer.com.
-//
-// A stored endpoint that isn't a URL is ignored rather than used: the
-// request then still goes to the vendor, which is what the account wanted
-// when it pasted a key there.
+// 模型调用的 base：优先账号自身 endpoint，否则用插件面向的站点 ps.air-outer.com。
+// 非 URL 的已存 endpoint 直接忽略，请求仍发往站点，符合误填 key 的账号的意图。
 export function apiBase(provider, auth) {
   const said = String(meta(auth, "endpoint") ?? provider?.endpoint ?? "").trim();
   if (isURLish(said)) return `${said.replace(/\/+$/, "")}/v1`;
@@ -100,18 +81,14 @@ export function apiBase(provider, auth) {
   return `${ENDPOINT}/v1`;
 }
 
-// siteBase resolves balance/check-in routes, including an explicit siteURL override.
+// 站点接口 base：余额与签到路由，支持显式 siteURL 覆盖。
 export function siteBase(provider, auth) {
   const said = String(meta(auth, "siteURL") ?? provider?.siteURL ?? "").trim();
   if (said) return said.replace(/\/+$/, "");
   return ENDPOINT;
 }
 
-// meta reads a field the account keeps, whether magpie hands the auth as the
-// flat record ({type, key, accessToken, …}) or with the sign-in's answers
-// under metadata ({type, key, metadata: {accessToken, …}}). Both shapes reach
-// a hook: the flat one from the store, the nested one from what authorize
-// returned, so every reader goes through here.
+// 读取账号保存的字段：magpie 可能传扁平记录，也可能把登录答案放在 metadata 下，两种形状都要兼容。
 function meta(auth, name) {
   if (!auth) return undefined;
   const flat = auth[name];
@@ -120,48 +97,41 @@ function meta(auth, name) {
   return nested === undefined || nested === null ? undefined : nested;
 }
 
-// userToken is the credential the site's own /api/user routes take: the
-// access token from the profile page. An sk- key is not one of those, and
-// sending it there is what makes the balance read as "access token 无效".
+// 站点 /api/user 路由使用的凭据：个人资料页的访问令牌。sk- key 不是它，
+// 拿它去请求才会得到「access token 无效」。
 function userToken(auth) {
   return String(meta(auth, "accessToken") ?? "").trim();
 }
 
-// apiKey is the credential completions take.
+// 模型调用使用的凭据。
 export function apiKey(auth) {
   return String(auth?.key ?? "").trim();
 }
 
-// userId is the New-Api-User header's value. A New API site answers 401 to
-// a session that is good but doesn't say which user it is, so the account
-// keeps the id beside the token.
+// New-Api-User 头的值：会话有效但未指明用户时，New API 站点会返回 401，故账号把 id 与会话一起保存。
 function userId(auth) {
   return String(meta(auth, "userId") ?? "").trim();
 }
 
-// headersText is the account's own header block, if it gave one.
+// 账号自身的请求头块。
 function headersText(auth) {
   return String(meta(auth, "headers") ?? "");
 }
 
-// cookieText is the browser cookie the account copied from the site.
-// A valid session authenticates user reads. WAF can still challenge those
-// reads even when the same Cookie works in a browser.
+// 账号从站点复制的浏览器 Cookie；有效会话可鉴权用户读取，但 WAF 仍可能拦截，即便它在浏览器里可用。
 function cookieText(auth) {
   return String(meta(auth, "cookie") ?? "").trim();
 }
 
-// parseCookies turns the text a browser shows for a site ("a=1; b=2", or
-// the tab-separated lines of a devtools cookie table) into a Cookie header.
-// A name repeated keeps its last value, as the browser's own send would.
+// 把浏览器展示的 Cookie 文本（"a=1; b=2"，或 devtools 制表符分隔的多行）转成 Cookie 头；
+// 同名后者覆盖前者，与浏览器发送行为一致。
 export function parseCookies(text) {
   const out = [];
   const seen = new Map();
   for (const raw of String(text ?? "").split(/\r?\n|;/)) {
     const s = raw.trim();
     if (!s || s.startsWith("#")) continue;
-    // A devtools row is "name<TAB>value<TAB>domain…"; a plain pair is
-    // "name=value". Both keep only the first two fields.
+    // devtools 每行是「name<TAB>value<TAB>domain…」，纯文本是 "name=value"，两者都只取前两段。
     const cols = s.split("\t");
     let name, value;
     if (cols.length > 1) {
@@ -183,9 +153,7 @@ export function parseCookies(text) {
   return out.join("; ");
 }
 
-// userHeaders are what a /api/user call carries: the access token, the user
-// id when the account knows it, and the browser cookie that gets past the
-// WAF when the account has one.
+// /api/user 请求携带的内容：访问令牌、已知时的用户 ID，以及账号持有的、可绕过 WAF 的浏览器 Cookie。
 export function userHeaders(provider, auth) {
   const h = headersOf(provider, auth);
   h.Authorization = userToken(auth);
@@ -205,13 +173,11 @@ export async function jsonOrText(res) {
   }
 }
 
-// ---- site session -----------------------------------------------------------
+// ---- 站点会话 ---------------------------------------------------------------
 
-// sessionOf pulls the site's session cookie out of a response. This site
-// answers a sign-in by setting `session` rather than by putting a token in
-// the body, and `get("set-cookie")` joins every cookie with ", " — a
-// character that also appears inside one (an Expires date) — so the separate
-// entries are what get read when the runtime offers them.
+// 从响应中取出站点会话 Cookie。该站点以设置 `session` 而非返回正文令牌的方式完成登录；
+// get("set-cookie") 会用 ", " 连接多个 Cookie，而该字符也出现在 Expires 日期内，
+// 因此运行环境提供分离条目时优先读取分离条目。
 function sessionOf(res) {
   let lines = [];
   try {
@@ -244,9 +210,7 @@ function enabledModelKey(item) {
   return item.key.trim();
 }
 
-// selectModelKeys turns one list read into the usable keys, deduplicated
-// by the key itself and kept in list order. One key needs no choice;
-// several are listed for the user to pick from.
+// 把一次列表读取转成可用 Key，按 key 本身去重并保持列表顺序；一把无需选择，多把列出供用户挑。
 function selectModelKeys(json, pageSize) {
   const data = json?.data;
   const items = Array.isArray(data) ? data : data?.items;
@@ -267,7 +231,7 @@ function selectModelKeys(json, pageSize) {
   return { kind: "found", items: itemsByKey };
 }
 
-// Read the account's existing keys once using the session from password login.
+// 用密码登录拿到的会话读取账号已有 Key，只读一次。
 export async function storedKeyOf(base, cookie, id) {
   const headers = { ...DEFAULT_HEADERS };
   if (cookie) headers.Cookie = cookie;
@@ -288,20 +252,15 @@ export async function storedKeyOf(base, cookie, id) {
   }
 }
 
-// signIn is one POST to the site's login route, and it is the whole feature:
-// the login response carries both the day's check-in and the balance.
+// signIn 就是整个功能：一次 POST 到登录路由，登录响应同时带回当日签到与余额。
 //
-// The vendor grants its daily credit at sign-in rather than through a route
-// of its own — its front end says "签到成功，新增额度已到账" when the login
-// response has checked_in — and that same response carries quota and
-// used_quota, the account's balance. So one call does both jobs, and it is
-// also the only way to read the balance from a server: /api/user/self, the
-// route New API normally reads it from, is the one this site's WAF answers
-// with a slider captcha, while /api/user/login is left alone.
+// 厂商在登录时发放每日额度，而不是另设路由（其前端在响应含 checked_in 时显示
+// 「签到成功，新增额度已到账」），同一响应也带有额度字段。因此一次调用完成两件事；
+// 这也是服务端唯一能读到余额的方式：New API 常规使用的 /api/user/self 被本站 WAF
+// 以滑块验证码拦截，而 /api/user/login 未被拦截。
 //
-// It answers {ok, checkedIn?, balance?, why?}. The caller decides whether a
-// false `ok` is the account's to fix (wrong password) or nobody's (the site
-// is down), so the reasons stay distinguishable here.
+// 返回 {ok, checkedIn?, balance?, why?}。ok 为 false 时由调用方区分「账号自身可修」
+// （密码错误）与「非账号问题」（站点故障），所以原因在此保持可区分。
 export async function signIn(provider, auth) {
   const user = String(meta(auth, "username") ?? "").trim();
   const pass = String(meta(auth, "password") ?? "");
@@ -323,23 +282,19 @@ export async function signIn(provider, auth) {
   const { json, text } = await jsonOrText(res);
   if (!json) {
     if (/^\s*<(?:!doctype|html)/i.test(String(text))) return { ok: false, why: "blocked", blocked: true };
-    // The body is not parsed JSON; it may echo submitted credentials, so it
-    // is never repeated back to the user.
+    // 正文不是 JSON；可能回显了提交的凭据，因此绝不回显给用户。
     return { ok: false, why: `HTTP ${res.status}` };
   }
   if (json.success === false) {
     const msg = String(json.message ?? json.msg ?? "");
-    // The site words a wrong password and a banned account the same way, so
-    // this is "the site refused these credentials", which is the account's
-    // to fix.
+    // 站点把密码错误与账号封禁表述得一样，故这里只说「站点拒绝了这组凭据」，属账号自身可修。
     if (/密码|password|封禁|banned|错误/i.test(msg)) return { ok: false, why: "bad-password", message: msg };
     return { ok: false, why: msg || "refused", message: msg };
   }
   const d = json.data ?? {};
   const balance = quotaBalance(d);
-  // `checked_in: true` means the site reported a new grant for *this* sign-in.
-  // A false or missing marker changes nothing about the login itself: the site
-  // counts the completed sign-in as the day's check-in either way.
+  // `checked_in: true` 表示站点确认本次登录新增了额度；为 false 或缺失不影响登录本身，
+  // 站点按登录完成计当日签到。
   const session = sessionOf(res);
   return {
     ok: true,
@@ -351,7 +306,7 @@ export async function signIn(provider, auth) {
   };
 }
 
-// Read /api/user/self with either an access token or a browser session.
+// 用访问令牌或浏览器会话读取 /api/user/self。
 export async function balanceByToken(provider, auth) {
   if (!userToken(auth) && !parseCookies(cookieText(auth))) return { ok: false, why: "no-token" };
   try {
@@ -360,18 +315,15 @@ export async function balanceByToken(provider, auth) {
       signal: withTimeout(REQUEST_TIMEOUT),
     });
     const { json, text } = await jsonOrText(res);
-    // New API answers 200 with success:false for a token it refuses, so the
-    // status alone doesn't say; the body does.
+    // New API 对被拒的令牌返回 200 + success:false，状态码不足以判断，须看正文。
     if (json && json.success === false) {
       const msg = String(json.message ?? "");
       if (/access\s*token|token.*(无效|invalid)|未登录/i.test(msg)) return { ok: false, why: "expired", expired: true };
       return { ok: false, why: msg || "refused" };
     }
     if (!res.ok) return { ok: false, why: `HTTP ${res.status}` };
-    // The site sits behind a WAF that answers an HTML slider-captcha page
-    // with 200 instead of the JSON: saying "<!doctype html>" back to the
-    // user hides the real problem, which is that the read was blocked and a
-    // sign-in is what gets past it.
+    // 站点 WAF 会用 200 返回 HTML 滑块验证码页而非 JSON：把 "<!doctype html>" 回给用户
+    // 会掩盖真正的问题——读取被拦截，而登录才是绕过它的方式。
     if (!json) {
       if (/^\s*<(?:!doctype|html)/i.test(String(text))) {
         return { ok: false, why: "blocked", blocked: true };
@@ -386,7 +338,7 @@ export async function balanceByToken(provider, auth) {
   }
 }
 
-// These endpoints report cumulative consumption, never remaining credit.
+// 这些接口只报告累计消耗，绝不报告剩余额度。
 export async function spendOf(provider, auth) {
   const rate = quotaRate(provider);
   const reads = [];
@@ -415,7 +367,7 @@ export async function spendOf(provider, auth) {
       if (typeof value !== "number" || !Number.isFinite(value) || value < 0) continue;
       return { ok: true, spent: value / read.divisor };
     } catch {
-      // A failed user read must not prevent the independent key fallback.
+      // 用户读取失败不得阻止后面独立的 key 回退路径。
     }
   }
   return { ok: false };

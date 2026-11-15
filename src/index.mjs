@@ -11,8 +11,7 @@ import { usageOf, checkinOf } from "./account-services.mjs";
 
 const PROVIDER = "agentrouter";
 
-// Models are listed by the vendor, so this is only what to show before a
-// sign-in and the shape (limits, tool calls) each listed model takes.
+// 模型由厂商列出，这里只是在登录前展示的内容及每个列出模型的形状（上下文、工具调用）。
 const MODEL_SHAPE = {
   name: undefined,
   limit: { context: 300000, output: 128000 },
@@ -20,35 +19,29 @@ const MODEL_SHAPE = {
   reasoning: true,
 };
 
-// The models this plugin itself ships, by the name to show them under. They
-// are what the row lists before the vendor's own list arrives — and what it
-// falls back to when that list cannot be read.
+// 本插件自带并在其名下展示的模型：厂商列表到达前展示它们，读取失败时回退到它们。
 //
-// magpie also keeps a models.dev catalog, and its cached entry for this
-// vendor still carries models the site has retired (see README, "模型列表从
-// 哪来"). Falling back to the row's current models would re-advertise them,
-// so the fallback is built from this table instead: a model shown here is one
-// this plugin vouches for.
+// magpie 也保有 models.dev 目录，其缓存的该厂商条目仍含站点已下架的模型（见 README
+// “模型列表从哪来”）。回退若沿用行上的模型会把它们重新上架，因此回退改由本表构建：
+// 出现在这里的模型即本插件背书的模型。
 const DECLARED_MODELS = {
   "gpt-5.6-sol": "GPT-5.6 Sol",
   "gpt-6-astra": "GPT-6 Astra",
   "gpt-6.1-sol": "GPT-6.1 Sol",
 };
 
-// declaredModels is the models this plugin vouches for, in the shape magpie
-// wants: a fresh object each time, because magpie edits what it is given.
+// declaredModels 返回本插件背书的模型，形状符合 magpie 要求：每次都新建对象，
+// 因为 magpie 会修改交给它的对象。
 function declaredModels() {
   const out = {};
   for (const [id, name] of Object.entries(DECLARED_MODELS)) out[id] = { ...MODEL_SHAPE, name };
   return out;
 }
 
-// modelsOf asks the vendor for the models this account has. It is the same
-// list every agent sees, and the vendor keeps it current.
+// modelsOf 向厂商询问该账号可用的模型：这是所有 agent 看到的同一份列表，由厂商保持最新。
 async function modelsOf(provider, { auth } = {}) {
-  // The fallback is this plugin's own list, never the row's: the row may
-  // still carry models a cached models.dev catalog gave it, and handing those
-  // back would advertise models the site no longer serves.
+  // 回退用本插件自己的列表，绝不用行上的：行上可能仍带着 models.dev 缓存给出的模型，
+  // 交回去等于宣传站点已不再提供的模型。
   const fallback = declaredModels();
   if (!auth) return fallback;
   const key = apiKey(auth);
@@ -71,8 +64,7 @@ async function modelsOf(provider, { auth } = {}) {
           output: Number(m.max_output_tokens ?? m.max_tokens ?? MODEL_SHAPE.limit.output) || MODEL_SHAPE.limit.output,
         },
         ...(m.supported_endpoint_types?.length ? { endpoints: m.supported_endpoint_types } : {}),
-        // The vendor says "openai" for what is its Responses API; the gateway
-        // reads that as the protocol the model speaks.
+        // 厂商对其 Responses API 报作 "openai"，网关据此理解该模型所说的协议。
         responses: true,
       };
     }
@@ -83,18 +75,15 @@ async function modelsOf(provider, { auth } = {}) {
 }
 
 export const AgentRouterAuthPlugin = async (input) => {
-  // The host hands over its reader for the provider's switches; an older one
-  // has none, and both body options stay on there.
+  // 宿主交出读取 provider 开关的读取器；旧宿主没有，两个正文选项在那里都保持开启。
   const portableResponses = () => input?.magpie?.option?.(PROVIDER, "portable-responses") !== false;
   const textFilterEnabled = () => input?.magpie?.option?.(PROVIDER, "text-filter") !== false;
   return {
-    // The provider before anyone signs in: the models the vendor serves, so the
-    // row has something to show, and the shape each listed one takes.
+    // 登录前的 provider：列出厂商提供的模型让行上先有内容，并给出每个列出模型的形状。
     //
-    // The vendor's models answer the Responses API only: a chat-completions
-    // request is refused with "does not support /v1/chat/completions, please use
-    // /v1/responses", whatever the key. So the provider speaks Responses, and
-    // the gateway translates an agent's Chat or Anthropic request into it.
+    // 厂商的模型只应答 Responses API：无论 key 为何，chat-completions 请求都会被拒并提示
+    // "does not support /v1/chat/completions, please use /v1/responses"。因此 provider 说
+    // Responses，由网关把 agent 的 Chat 或 Anthropic 请求转换过来。
     config: async (cfg) => {
       cfg.provider ??= {};
       cfg.provider[PROVIDER] ??= {
@@ -108,16 +97,12 @@ export const AgentRouterAuthPlugin = async (input) => {
     auth: {
       provider: PROVIDER,
 
-      // The site account signs in with the username and password the user
-      // entered; the login session then reads the account's existing model
-      // keys. One key is taken as is; several are offered by ask() as a
-      // choice, and the picked one is saved. No other sign-in method is
-      // offered, and no credential ships in the source.
+      // 站点账号用用户输入的用户名与密码登录，登录会话随后只读读取账号已有模型 Key：
+      // 一把直接取用，多把由 ask() 列出供选并将所选保存。不提供其他登录方式，源码不含凭据。
       methods: [signInMethod()],
 
-      // Inline replay avoids resource-local item lookups when complete contents
-      // are present. Server-only references and unknown kinds stay untouched.
-      // Response normalization preserves successful bytes and never retries.
+      // 内联回放：在正文完整时避免按资源本地条目查找。仅服务端引用与未知类型保持原样。
+      // 响应归一化保留成功字节，且从不重试。
       async loader(getAuth, provider) {
         const auth = (await getAuth()) ?? {};
         const textFilter = textFilterEnabled() ? await loadTextFilter() : null;
@@ -151,9 +136,8 @@ export const AgentRouterAuthPlugin = async (input) => {
       usage: usageOf,
       checkin: checkinOf,
 
-      // Switches the user can turn on the provider's editor. The words are
-      // Chinese beside the English maps, so magpie shows them in the
-      // window's own language (options' labels/descriptions).
+      // 用户在 provider 编辑器中可切换的开关：中文文案与英文映射并存，
+      // 由 magpie 按窗口语言展示（options 的 labels/descriptions）。
       options: [
         {
           key: "text-filter",
@@ -179,8 +163,7 @@ export const AgentRouterAuthPlugin = async (input) => {
       models: modelsOf,
     },
 
-    // A conversation's turns reach the vendor under one id, so its cache sees
-    // them as one conversation.
+    // 同一会话的轮次以同一个 id 到达厂商，其缓存因此把它们视为同一会话。
     "chat.headers": async (input, output) => {
       if (input?.model?.providerID !== PROVIDER && input?.provider?.info?.id !== PROVIDER) return;
       if (input.sessionID) output.headers["x-session-id"] = input.sessionID;

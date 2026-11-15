@@ -1,5 +1,4 @@
-// Inspect a clone without consuming the caller's Request or Response. A null
-// result means inspection was inconclusive; callers must preserve the original.
+// 通过克隆读取正文，不消耗调用方的 Request/Response；返回 null 表示无法判定，调用方必须保留原对象。
 export async function readCloneText(source, { maxBytes, timeoutMs, signal }) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 ||
       !Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || signal?.aborted) return null;
@@ -26,7 +25,7 @@ export async function readCloneText(source, { maxBytes, timeoutMs, signal }) {
   finally {
     clearTimeout(timer);
     if (abort) signal?.removeEventListener("abort", abort);
-    // Tee cancellation can wait for the original consumer. Never await it.
+    // 克隆流的取消可能等待原消费方，不能 await。
     if (reader) void reader.cancel().catch(() => {});
   }
 }

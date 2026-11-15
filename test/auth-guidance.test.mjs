@@ -4,7 +4,7 @@ import plugin from "../src/index.mjs";
 import { withFetch as stubFetch } from "./helpers/fetch.mjs";
 
 const raw = (body, headers = {}) => new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json", ...headers } });
-// Magpie's failed() adapter consumes error, not message.
+// magpie 的 failed() 适配器只读取 error，不读取 message。
 function hostFailed(r) {
   const why = typeof r?.error === "string" ? r.error.trim() : r?.error instanceof Error ? r.error.message : "";
   return why ? { ok: false, error: why.slice(0, 500) } : { ok: false };
@@ -48,7 +48,7 @@ test("ask lists several keys by name and masked key, once per sign-in", async ()
     for (const secret of ["synthetic-one", "synthetic-two", "site-pass"]) {
       assert.ok(!JSON.stringify(choice).includes(secret));
     }
-    // Repeated asks (a redraw or retry) reuse the one login and list read.
+    // 重复提问（重绘或重试）复用同一次登录与列表读取。
     assert.deepEqual(await method.ask(inputs), choice);
     assert.equal(calls.length, 2);
     assert.equal(await method.ask({ ...inputs, modelKeyIndex: "1" }), null);

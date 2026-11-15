@@ -1,7 +1,6 @@
-// Descriptors are native icacls /save output, not caller-supplied identity claims.
+// 描述符来自 icacls /save 的原生输出，不是调用方自报的身份。
 export function currentWindowsTrustee(descriptor) {
-  // The fresh probe is granted to the exact whoami SID with inheritance removed.
-  // Trust its serialized identity only when there is exactly one explicit ACE.
+  // 探针目录只授予 whoami 的精确 SID 且关闭继承；仅当只有一条显式 ACE 时才采信其序列化身份。
   return /^D:[A-Z]*\(A;OICI;FA;;;([A-Z]{2}|S-1-[0-9-]+)\)$/.exec(descriptor)?.[1];
 }
 

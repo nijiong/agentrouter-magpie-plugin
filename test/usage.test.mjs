@@ -59,9 +59,8 @@ test('Endpoint onboarding is absent and a previously misplaced key stays ignored
 });
 
 test('The Codex headers are always sent unless the user overrides them', async () => {
-  // The gateway only admits its own client, so the Codex User-Agent is a
-  // default, not a switch. A user with another working identity overrides
-  // it in their own header block.
+  // 网关只放行自家客户端，故 Codex User-Agent 是默认值而非开关；有可用其他标识的用户
+  // 可在自己的请求头块中覆盖。
   assert.equal(headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
   assert.equal(headersOf({}, {}).Accept, 'application/json');
   assert.equal(
@@ -69,15 +68,14 @@ test('The Codex headers are always sent unless the user overrides them', async (
     'mine',
   );
 
-  // A host from before options hands over no reader at all; same default.
+  // 旧宿主完全不提供读取器，默认值相同。
   await AgentRouterAuthPlugin();
   assert.equal(headersOf({}, {})['User-Agent'], 'codex_cli_rs/0.101.0');
 });
 
 test('A retired model is never advertised back, whichever path lists it', async () => {
-  // magpie's cached models.dev entry for this vendor still names models the
-  // site has retired. The plugin's own list is what it answers with when the
-  // vendor's list cannot be read, so those names cannot come back through it.
+  // magpie 缓存的 models.dev 该厂商条目仍列出站点已下架的模型；厂商列表读不到时插件回以
+  // 自己的列表，因此这些名字无法经它回来。
   const retired = ['claude-opus-5', 'claude-opus-4-8', 'deepseek-v4-flash', 'glm-5.3'];
   const config = {};
   await plugin.config(config);
@@ -85,13 +83,12 @@ test('A retired model is never advertised back, whichever path lists it', async 
   assert.deepEqual(declared, ['gpt-5.6-sol', 'gpt-6-astra', 'gpt-6.1-sol']);
   for (const id of retired) assert.ok(!declared.includes(id), `${id} must not be declared`);
 
-  // No account yet: the vendor's list cannot be asked, and the row keeps the
-  // plugin's list rather than the row's.
+  // 尚无账号：无法询问厂商列表，行上保留插件的列表而非行自身的。
   const row = { models: { 'claude-opus-5': { name: 'x' }, 'gpt-6-astra': { name: 'y' } } };
   const listed = await plugin.provider.models(row);
   for (const id of retired) assert.ok(!(id in listed), `${id} must not be listed`);
 
-  // The vendor refuses the list: same answer, not the row's.
+  // 厂商拒绝提供列表：答案相同，仍是插件的列表。
   const original = globalThis.fetch;
   globalThis.fetch = async () => new Response('nope', { status: 500 });
   try {
@@ -103,9 +100,8 @@ test('A retired model is never advertised back, whichever path lists it', async 
 });
 
 test('A content-filter refusal is explained, not left looking like a rate limit', async () => {
-  // The vendor's filter answers refused text with 400 content-blocked. Waiting
-  // or retrying never clears it, so an agent that reads it as a transient
-  // gateway failure burns its budget repeating the same text forever.
+  // 厂商过滤器对被拒文本回 400 content-blocked；等待或重试都无法解除，若 agent 把它
+  // 当成暂时性网关故障，会一直重复同一段文本、耗尽预算。
   const original = globalThis.fetch;
   const blocked = JSON.stringify({
     error: {
@@ -129,11 +125,9 @@ test('A content-filter refusal is explained, not left looking like a rate limit'
     assert.match(text, /内容过滤器/);
     assert.match(text, /改写/);
 
-    // magpie decides "may another provider retry this?" by matching quota /
-    // rate-limit words in the body (fallback.go's retryable/quotaWords). If
-    // the note reads like one of those, a hard refusal is retried on every
-    // account and then fails over — surfacing as another provider's 429.
-    // So the note must not contain any of them.
+    // magpie 靠正文里的 quota / rate-limit 词判断「是否允许其他提供商重试」
+    // （fallback.go 的 retryable/quotaWords）。若该说明读起来像其中之一，硬拒绝会被
+    // 每个账号重试后故障转移，最终呈现为别的提供商的 429。因此说明中不得含有这些词。
     const quotaWords =
       /quota|insufficient|balance|credit|billing|out of budget|budget (exceeded|exhausted)|exceeded|rate.?limit|usage.?limit|limit.?reached|hit your .*limit|too many requests|overloaded|余额|额度|欠费|限流|频率|套餐|用量|上限/i;
     assert.equal(quotaWords.test(text), false, 'the refusal must not read like a quota error');
@@ -143,11 +137,9 @@ test('A content-filter refusal is explained, not left looking like a rate limit'
 });
 
 test('A token-rate-limit 429 says it is a rate cap with a wait, not a spent account', async () => {
-  // The vendor answers its per-minute token cap with 429 and no Retry-After,
-  // and says nothing about when it lifts. magpie retries it on every account
-  // (each retry spending more of the same counted tokens) and then fails over,
-  // so the caller can end up seeing another provider's 429. Saying "wait a
-  // minute" and sending Retry-After is what a caller can act on.
+  // 厂商对每分钟 token 上限回 429 且不带 Retry-After，也不说明何时解除。magpie 会在
+  // 每个账号上重试（每次重试都继续消耗同一批已计 token）再故障转移，调用方最终看到的
+  // 可能是别的提供商的 429。给出「一分钟后再试」并发送 Retry-After，才是调用方能据以行动的信息。
   const original = globalThis.fetch;
   const capped = JSON.stringify({
     message: 'Your requests to gpt-6.1-sol for gpt-6.1-sol in example-region have exceeded token rate limit.',
@@ -168,7 +160,7 @@ test('A token-rate-limit 429 says it is a rate cap with a wait, not a spent acco
     assert.match(text, /gpt-6\.1-sol/);
     assert.match(text, /一分钟后再试/);
     assert.match(text, /不保证届时已恢复/);
-    // still a rate limit, so magpie keeps treating it as one (failRate)
+    // 这仍是速率限制，magpie 继续按速率限制处理（failRate）。
     assert.match(text, /token rate limit/i);
   } finally {
     globalThis.fetch = original;
@@ -230,7 +222,7 @@ async function readUsage(auth, responses, provider = {}) {
   }
 }
 
-test('Cookie-only account reads remaining balance and real consumption', async () => {
+test('Cookie-only account reads the remaining balance as a share, with no money counted in the window', async () => {
   const { usage, calls } = await readUsage(
     { metadata: { cookie: 'session=example', userId: '123' } },
     [json({ success: true, data: { quota: 75000000, used_quota: 25000000 } })],
@@ -238,9 +230,13 @@ test('Cookie-only account reads remaining balance and real consumption', async (
   assert.equal(calls[0].headers.Cookie, 'session=example');
   assert.equal(calls[0].headers['New-Api-User'], '123');
   assert.equal(usage.balance, '$150.00');
-  assert.equal(usage.windows[0].amount, 50);
-  assert.equal(usage.windows[0].limit, 200);
   assert.equal(usage.windows[0].used, 25);
+  assert.equal(usage.windows[0].remaining, 75);
+  // 若窗口在占比之外还给出金额计数，magpie 会逐日累计其读数并显示「每天花掉的金额」；
+  // 美元金额改由 `balance` 表达，故窗口中不得出现任何计数。
+  for (const field of ['amount', 'limit', 'unit', 'display']) {
+    assert.equal(field in usage.windows[0], false, `${field} must not be declared`);
+  }
 });
 
 test('WAF-blocked balance falls back to account consumption without inventing remaining quota', async () => {

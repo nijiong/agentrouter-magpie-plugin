@@ -1,9 +1,7 @@
 import { ENDPOINT, signIn, storedKeyOf } from "./site-client.mjs";
 
-// The single sign-in method asks for the account's username and password.
-// No credential is baked into the source: the user types both, and the host
-// saves what authorize returned. The sign-in form uses ps.air-outer.com;
-// legacy address overrides apply only to stored account/provider configuration.
+// 唯一的登录方式要求账号与密码。源码不含任何内置凭据：两者由用户输入，宿主保存
+// authorize 的返回值。登录表单使用 ps.air-outer.com；旧地址覆盖只作用于已存账号/provider 配置。
 const USERNAME_PROMPT = {
   type: "text",
   key: "username",
@@ -18,11 +16,9 @@ const PASSWORD_PROMPT = {
   validate: value => String(value ?? "") ? undefined : "请输入站点密码",
 };
 
-// signInState holds the logins the sign-in questions have started, keyed by
-// the answers given so far. ask() runs before authorize and may run again
-// for the same answers (a redraw, a retry), so one sign-in logs in once and
-// reads the key list once. Entries are short-lived and dropped as soon as
-// authorize takes them; the secrets they hold never leave this module.
+// signInState 保存提问阶段的登录，按已给出的答案索引。ask() 先于 authorize 运行，
+// 且可能对同一组答案重复运行（重绘、重试），故一次登录只登录一次、只读一次列表。
+// 条目短时有效，authorize 取用后即删；其中凭据不离开本模块。
 const SIGN_IN_TTL = 10 * 60_000;
 const SIGN_IN_MAX = 16;
 const pendingSignIns = new Map();
@@ -47,9 +43,8 @@ function signInState(inputs) {
   return state;
 }
 
-// listingOf signs in and reads the account's keys once for one set of
-// answers. The result is the login's own ({ok:false,…}) or storedKeyOf's
-// verdict; either way it is computed a single time per sign-in.
+// listingOf 针对一组答案登录并读取账号 Key，只算一次。结果或来自登录本身
+// （{ok:false,…}），或来自 storedKeyOf 的判定；无论如何每次登录只计算一次。
 function listingOf(state) {
   state.listing ??= (async () => {
     const auth = { metadata: { username: state.username, password: state.password, site: "air" } };
@@ -73,8 +68,7 @@ function listingOf(state) {
   return state.listing;
 }
 
-// loginProblem words a failed sign-in for the user, never echoing the
-// site's own response text (it may carry credentials).
+// loginProblem 把失败的登录表述给用户，绝不回显站点响应正文（其中可能含凭据）。
 function loginProblem(login) {
   if (login.why === "bad-password") return "站点拒绝了登录，请核对用户名和密码后重试。";
   if (login.blocked) return "登录接口被站点验证码拦截，请稍后重试。";
@@ -84,11 +78,9 @@ function loginProblem(login) {
   return "登录失败，站点未接受请求，请稍后重试。";
 }
 
-// ask is the sign-in's own questioning (magpie's method hook): the account
-// and password first, then — only when the account has several usable
-// keys — one choice among them, listed by name and masked key. A single
-// key needs no question. Hosts without the hook fall back to prompts and
-// authorize, which still take the only key or refuse an unclear list.
+// ask 是登录自身的提问（magpie 的 method hook）：先账号密码，随后仅当账号有多把可用 Key 时
+// 在其中选一，按名称与掩码 Key 列出；单把无需提问。不支持的宿主回落到 prompts 与 authorize，
+// 仍会取用唯一 Key，或对不明确的列表拒绝。
 async function askSignIn(inputs) {
   const given = inputs ?? {};
   if (!("username" in given)) return USERNAME_PROMPT;
@@ -106,17 +98,15 @@ async function askSignIn(inputs) {
   };
 }
 
-// masked keeps a value out of a message: a key or a token never goes into
-// an error the user sees or a log line.
+// masked 让值不出现在消息里：Key 或令牌绝不进入用户可见的错误信息或日志。
 export function masked(v) {
   const s = String(v ?? "");
   if (s.length <= 8) return s ? "…" : "";
   return `${s.slice(0, 4)}…${s.slice(-4)}`;
 }
 
-// keyRef is how one key is shown in the sign-in picker: its name and
-// masked key, never the key itself. The choice's value is its place in
-// the listed order, so the answer carries no credential either.
+// keyRef 是登录选择器中一把 Key 的展示：名称与掩码 Key，绝不显示 Key 本身。
+// 选项值是其列表序号，故答案也不携带凭据。
 function keyRef(item, index) {
   const name = String(item?.name ?? "").trim();
   return `#${index + 1} ${name ? name + " · " : ""}${masked(item?.key)}`;

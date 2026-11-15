@@ -17,8 +17,7 @@ function escapePattern(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Protect Markdown code rather than changing executable examples accidentally.
-// An unclosed code delimiter conservatively protects the rest of the segment.
+// 保护 Markdown 代码，避免误改可执行示例；未闭合的代码定界符保守地保护剩余片段。
 function inlineCodeRanges(text) {
   const ranges = [];
   const runs = /`+/g;
@@ -32,11 +31,9 @@ function inlineCodeRanges(text) {
   return ranges;
 }
 
-// Container fences have context-dependent indentation/closing rules. Without a
-// full Markdown parser, preserve that whole field instead of risking code edits.
+// 容器围栏的缩进与闭合规则依赖上下文；没有完整的 Markdown 解析器时，整体保留该字段而非冒改代码的风险。
 function codePrefix(line) {
-  // Advance monotonically: nested whitespace regexes can backtrack exponentially
-  // on innocent deeply quoted prose even when the request is only a few bytes.
+  // 单调前进：嵌套空白正则即便面对仅数字节的深层引用文本也可能指数级回溯。
   const space = char => char === " " || char === "\t";
   let position = 0, container = false, indented = false;
   while (position < line.length) {
@@ -57,7 +54,7 @@ function codePrefix(line) {
     if (end === position) break;
     container = true;
     position = end;
-    if (space(line[position])) position++; // One container separator is not code indentation.
+    if (space(line[position])) position++; // 一个容器分隔符不算代码缩进。
   }
   return { indented, containerFence: container && (line.startsWith("```", position) || line.startsWith("~~~", position)) };
 }
@@ -66,8 +63,7 @@ function hasContainerFence(text) {
   return text.split(/\r?\n/).some(line => codePrefix(line).containerFence);
 }
 
-// Keep structural separators with code, but leave indentation on the next
-// nonblank line for that line's own Markdown classification.
+// 结构分隔符跟着代码一起保留，缩进留给下一个非空行按其自身 Markdown 规则分类。
 function codeRangeWithBoundaries(text, start, end) {
   while (start > 0 && /[ \t\r\n]/.test(text[start - 1])) start--;
   let cursor = end;
@@ -83,12 +79,10 @@ function codeRangeWithBoundaries(text, start, end) {
 }
 
 function outsideProseCode(text, replace) {
-  // Collect ranges against the original text, not sliced suffixes: inline code
-  // must not erase indentation, nor may indentation split a multiline code span.
+  // 对照原文而非切片收集范围：行内代码不得抹掉缩进，缩进也不得拆开跨行代码段。
   const inline = inlineCodeRanges(text);
   const protectedRanges = [...inline];
-  // A literal rule may contain the marker; protecting only matches that start
-  // with it still lets a longer rule consume a marker on a later pass.
+  // 字面规则本身可能含该标记；只保护以它开头的匹配，仍会让更长的规则在后续轮次吃掉标记。
   for (const marker of text.matchAll(/\[FILTERED\]/g)) {
     protectedRanges.push([marker.index, marker.index + marker[0].length]);
   }
@@ -101,8 +95,7 @@ function outsideProseCode(text, replace) {
       while (inlineIndex < inline.length && inline[inlineIndex][1] <= linePosition) inlineIndex++;
       const insideInline = inlineIndex < inline.length && inline[inlineIndex][0] <= linePosition;
       if (!insideInline && line.trim() && codePrefix(line).indented) {
-        // Preserve both adjoining separators: consuming either can change the
-        // next pass's Markdown classification even without touching code bytes.
+        // 两侧分隔符都要保留：吃掉任一侧都会改变下一轮的 Markdown 分类，即便未改动代码字节。
         protectedRanges.push(codeRangeWithBoundaries(text, position, position + paragraph.length));
         break;
       }
@@ -143,7 +136,7 @@ function outsideCode(text, replace) {
   return output.join("");
 }
 
-// Literal, bounded rules only: no inferred vendor keywords and no user regex.
+// 只支持字面、有界的规则：不推断厂商关键词，也不接受用户正则。
 export function createTextFilter(config) {
   if (!config || typeof config !== "object" || Array.isArray(config) ||
       Object.keys(config).some(key => !["terms", "caseSensitive"].includes(key)) ||
@@ -165,8 +158,7 @@ export function createTextFilter(config) {
   };
 }
 
-// Loaded when the provider loader is created. Editing the file requires a plugin
-// reload. A missing file/empty list is off; a broken configured file is not ignored.
+// 在创建 provider loader 时加载；改动文件需重新加载插件。文件缺失或词表为空即关闭；配置了但损坏的文件不会被忽略。
 export async function loadTextFilter(path = new URL("./content-filter.local.json", import.meta.url)) {
   let file;
   try { file = await open(path, "r"); }
@@ -187,8 +179,7 @@ export async function loadTextFilter(path = new URL("./content-filter.local.json
   finally { await file.close(); }
 }
 
-// This is a narrowly scoped text transformation, not a data-loss prevention
-// boundary: tool data, annotations, media and server-side/opaque history stay put.
+// 这是范围很窄的文本改写，不是防数据丢失的边界：工具数据、标注、媒体与服务端/不透明历史都保持原样。
 export function redactResponsesBody(body, filter) {
   if (!filter || !body || typeof body !== "object" || Array.isArray(body)) return { body, replacements: 0 };
   let replacements = 0;
