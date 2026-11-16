@@ -13,6 +13,7 @@
 - 明确默认国内站与高级地址覆盖的区别：保留已有 `endpoint` / `apiBase` / `siteURL` 能力；首次登录表单、Key 列表及本地签到工具仍使用国内站，不新增地址配置入口。
 - 用量窗口不再声明金额计数（`Amount` / `Limit` / `Unit` 及货币形式的 `"x / y"` display）：magpie 会对这类窗口按逐日读数累计并显示「每天花掉的金额」，只声明占比可避免该行。余额 $ 金额改由顶层 `balance` 字段表达，`Balance` 窗口保留 `used` / `remaining` 百分比，展示不变。
 - 源码与测试注释统一改为中文并精简；未发现可删除的失效测试用例。
+- 包名由 `opencode-agentrouter-auth` 改为 `agentrouter-magpie-plugin`，与仓库名一致；仅影响 magpie 插件列表中显示的标识，provider id `agentrouter` 与账号配置不变。
 
 ## 0.1.10 — 2026-11-14
 

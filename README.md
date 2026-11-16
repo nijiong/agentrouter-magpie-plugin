@@ -24,7 +24,7 @@
 
 ### 1. 安装插件
 
-本插件是独立维护的定制版，**未发布到 npm registry**，请使用下方源码安装。包名 `opencode-agentrouter-auth` 仅用于本地包标识，不代表 registry 上存在同名可用版本。
+本插件是独立维护的定制版，**未发布到 npm registry**，请使用下方源码安装。包名 `agentrouter-magpie-plugin` 仅用于本地包标识，不代表 registry 上存在同名可用版本。
 
 > 下文的 `magpie` 命令都在 magpie 自己的运行环境中执行。容器部署请先 `docker exec -it magpie sh` 进入容器，或自行给命令加上该前缀；各小节不再重复这一前缀。
 

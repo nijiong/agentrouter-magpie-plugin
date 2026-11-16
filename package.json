@@ -1,5 +1,5 @@
 {
-  "name": "opencode-agentrouter-auth",
+  "name": "agentrouter-magpie-plugin",
   "version": "0.1.10",
   "description": "Independent AgentRouter provider for magpie and OpenCode: password sign-in entered by the user, ps.air-outer.com by default with explicit endpoint overrides, configurable headers, balance and daily check-in. Derived from ZhaoJun233/agentrouter-magpie-plugin (MIT).",
   "type": "module",
