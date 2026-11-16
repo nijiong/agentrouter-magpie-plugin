@@ -21,7 +21,7 @@
     "src/content-filter.example.json",
     "src/local-checkin.mjs",
     "src/windows-acl.mjs",
-    "LOCAL-CHECKIN.md",
+    "docs/LOCAL-CHECKIN.md",
     "README.md",
     "CHANGELOG.md",
     "docs/OPTIMIZATION.md",

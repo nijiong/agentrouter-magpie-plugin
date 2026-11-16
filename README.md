@@ -4,11 +4,9 @@
 
 ## 文档导航
 
-- [贡献指南](<CONTRIBUTING.md>)：Issue → PR → 自动检查 → 人工审查。
-- [安全政策](<SECURITY.md>)：敏感信息处理与私密漏洞报告。
 - [优化设计与升级指南](<docs/OPTIMIZATION.md>)：问题背景、与参考项目的取舍、兼容边界、升级/回滚与本地验证。
 - [更新日志](<CHANGELOG.md>)：版本变化与[出处致谢](<CHANGELOG.md#出处与致谢>)。
-- [本地签到说明](<LOCAL-CHECKIN.md>)：独立签到工具的使用与安全边界。
+- [本地签到说明](<docs/LOCAL-CHECKIN.md>)：独立签到工具的使用与安全边界。
 - [出处与致谢](<#出处与致谢>)：原始项目、作者与许可。
 
 > 仓库源码更新不等于 npm 发布或你的网关已升级。请按升级指南自行验证；不要把真实 Cookie、访问令牌、私有词表或抓包提交到仓库。
@@ -28,9 +26,11 @@
 
 本插件是独立维护的定制版，**未发布到 npm registry**，请使用下方源码安装。包名 `opencode-agentrouter-auth` 仅用于本地包标识，不代表 registry 上存在同名可用版本。
 
-#### Docker 源码安装
+> 下文的 `magpie` 命令都在 magpie 自己的运行环境中执行。容器部署请先 `docker exec -it magpie sh` 进入容器，或自行给命令加上该前缀；各小节不再重复这一前缀。
 
-**源码安装与 npm 安装二选一，不要重复注册。** 克隆后核对提交及包版本为预期版本，更新已有目录前先备份；最终以宿主实际加载版本为准，不能仅凭本地文件已更新判断升级成功。
+#### 配置卷源码安装
+
+克隆后核对提交及包版本为预期版本，**只注册一次，不要重复添加同一个插件目录**；更新已有目录前先备份，最终以宿主实际加载版本为准，不能仅凭本地文件已更新判断升级成功。
 
 将插件源码放入 magpie 配置卷中的本地插件目录：
 ```bash
@@ -41,8 +41,8 @@ mkdir -p "$VOL/magpie/local-plugins"
 git clone https://github.com/nijiong/agentrouter-magpie-plugin.git "$VOL/magpie/local-plugins/agentrouter"
 chown -R 65532:65532 "$VOL/magpie/local-plugins/agentrouter"   # 仅修改本插件；uid/gid 按镜像实际情况修改
 
-# 在 magpie 容器中加载插件
-docker exec magpie magpie plugin add /config/magpie/local-plugins/agentrouter
+# 加载插件
+magpie plugin add /config/magpie/local-plugins/agentrouter
 ```
 
 #### 本地 / 原生进程源码安装
@@ -58,8 +58,7 @@ magpie plugin add /path/to/agentrouter-magpie-plugin
 本定制版只保留**账号密码登录**一种方式，登录表单使用国内站 `https://ps.air-outer.com`（已移除国际站 agentrouter.org、API Key、GitHub 授权与系统访问令牌入口）。登录表单的账号与密码均为空，需你本人输入自己的站点账号；两者必填，留空会在发起任何请求前被拒绝。也可按下文手动配置 `username` / `password`；显式地址配置的作用范围见[端点与站点](<#端点与站点>)。
 
 ```bash
-docker exec -it magpie magpie plugin login agentrouter
-# 非 Docker 环境直接运行：magpie plugin login agentrouter
+magpie plugin login agentrouter
 ```
 
 登录流程：**站点账号 → 站点密码 →（多把 Key 时）从列表中选择一把模型 Key**。插件以账号密码调用 `POST /api/user/login`，用返回的登录会话只读列出账号下已有的模型 Key（候选须启用、非空、未掩码、未过期）：只有一把时自动选用；有多把时逐一列出（名称 + 掩码后的 Key，不显示完整 Key），由你选择要用的那把，随成功认证保存模型 Key 与会话。模型调用本身只认模型 Key，密码与会话不能用于 `/v1` 请求。
@@ -78,14 +77,14 @@ docker exec -it magpie magpie plugin login agentrouter
 
 ```bash
 # 1. 测试模型对话是否正常响应
-docker exec magpie magpie provider test agentrouter
+magpie provider test agentrouter
 # 成功时输出类似：✓ responses  3469 ms · gpt-6-astra
 
 # 2. 查看已识别并激活的模型列表
-docker exec magpie magpie provider models agentrouter
+magpie provider models agentrouter
 
 # 3. 可选：已配置账号数据凭据时检查额度与用量（不是模型验证）
-docker exec magpie magpie quota agentrouter
+magpie quota agentrouter
 ```
 
 ---
@@ -118,6 +117,7 @@ docker exec magpie magpie quota agentrouter
 
 - `username` / `password`：你本人的站点账号与密码；两者必填，留空时登录、签到与余额回落到密码登录都会被本地拒绝。
 - `cookie` + `userId`：登录会话读取账号余额；不保证通过 WAF。
+- `accessToken`：旧版「系统访问令牌」登录留下的字段，登录入口已移除，但余额与消耗读取仍会识别它；同样不保证通过 WAF。
 - `endpoint` / `apiBase`：保留模型地址覆盖能力，默认 `https://ps.air-outer.com/v1`。
 - `siteURL`：保留余额、用量站点接口与签到登录的地址覆盖能力，默认 `https://ps.air-outer.com`；不改变首次登录表单及其 Key 列表地址。
 - `headers`：保留自定义请求头能力。
@@ -130,7 +130,7 @@ AgentRouter 的每日签到由**服务端按登录计算**：登录接口成功�
 
 登录响应里的 `checked_in` 只是附加信息，用于区分本次登录是否**新增额度**，不作为签到是否完成的判定条件：字段缺失或为 `false` 时签到同样已完成。
 
-密码为高权限凭据：网关部署时保存在服务器的 `plugin-auth.json`，本机工具保存在 `credentials.txt`（明文、ACL 收紧）。像保护密码一样保护这些文件，不要发到聊天、工单、截图或 Git。
+密码为高权限凭据：网关部署时保存在服务器的 `plugin-auth.json`（magpie 配置目录下的 `magpie/plugin-auth.json`），本机工具保存在 `credentials.txt`（明文、ACL 收紧）。像保护密码一样保护这些文件，不要发到聊天、工单、截图或 Git。
 
 ### 结果含义
 
@@ -189,6 +189,7 @@ AgentRouter 的网关只回应它认识的客户端 —— 白名单里是它**�
 
 - API key `sk-…`：对话、模型列表、累计消耗；登录时由插件只读查找并保存。
 - 站点登录会话（`cookie`）+ 用户 ID：账号数据读取；余额可能被 WAF 拦截。
+- 旧版 `accessToken`：登录入口已移除，但余额与消耗读取仍识别该字段；不能代替模型 key。
 - 站点用户名密码：登录、签到与查找模型 Key；由你登录时输入并保存，源码不含任何内置凭据。
 
 `sk-` key 不能代替账号访问令牌。`/api/user/token` 会重新生成访问令牌，使旧令牌失效；插件不调用此接口，也不会把密码或会话当作模型 key。
@@ -240,8 +241,8 @@ AgentRouter 的模型**不支持** `/v1/chat/completions`：
 
 ```bash
 # 让 magpie 重新拉一次账号的模型列表
-docker exec magpie magpie providers        # 状态里会写 "N of M models · fetched …"
-docker exec magpie magpie provider models agentrouter
+magpie providers        # 状态里会写 "N of M models · fetched …"
+magpie provider models agentrouter
 ```
 
 如果你的面板仍显示已下架的模型，那是目录缓存的贡献，不是插件声明的。可以：
@@ -391,6 +392,8 @@ SSE 仍只观察首个有效内容或未知事件之前最多 **64 KiB / 15 秒*
 
 这是已支持的高级路径，不是首次登录表单，也不是新的设置页面。修改前备份宿主的认证配置，保护文件权限；示例中的占位值不可原样用于真实账号。保持既有账号 key、站点和不相关字段不变。
 
+文件位置是 magpie 配置目录下的 `magpie/plugin-auth.json`：容器部署请看 `/config/magpie/plugin-auth.json`，宿主机上则是配置卷里的 `<配置卷>/magpie/plugin-auth.json`（常见为 `/opt/magpie/config/magpie/plugin-auth.json`）。该文件由 magpie 读写，插件只通过宿主拿到已解密的 auth 对象，不直接打开它。
+
 `plugin-auth.json` 的形态：
 
 ```json
@@ -405,13 +408,14 @@ SSE 仍只观察首个有效内容或未知事件之前最多 **64 KiB / 15 秒*
       "password": "（你本人的站点密码，必填；保存在网关服务器）",
       "cookie": "session=…（登录时自动保存，配合用户 ID）",
       "userId": "（登录时自动保存）",
+      "accessToken": "（可选，旧版遗留；配合用户 ID 读账号余额）",
       "headers": "User-Agent: codex_cli_rs/0.101.0"
     }
   }
 }
 ```
 
-改完后执行 `docker restart magpie`（或重启 magpie 进程）生效。
+改完后重启 magpie 进程生效。
 
 ## 端点与站点
 
@@ -424,7 +428,7 @@ SSE 仍只观察首个有效内容或未知事件之前最多 **64 KiB / 15 秒*
 ## 额度百分比与字段说明
 
 ```bash
-docker exec magpie magpie quota | grep -i agentrouter
+magpie quota agentrouter
 #   agentrouter · example-user · API key …XXXX   subscription  $150.00 · Balance 25%
 #   上述为虚构示例；实际输出也可能提示“累计消耗…；剩余额度未知”。
 ```
@@ -441,8 +445,8 @@ docker exec magpie magpie quota | grep -i agentrouter
 这是独立于上文发送前替换的 **reject** 策略，不会替换文字，也不能据此判断 AgentRouter 的真实拦截词。现有部署若需要正则拒绝，可另行评估社区中间件：
 
 ```bash
-docker exec magpie magpie plugin add @magpie-community/middleware-word-guard
-docker exec magpie magpie plugin options word-guard '{
+magpie plugin add @magpie-community/middleware-word-guard
+magpie plugin options word-guard '{
   "action": "reject", "check": "last",
   "patterns": ["\\b\\d{3}-\\d{4}\\b", "secret[-_]?codename"],
   "words": [], "replies": false
@@ -470,7 +474,7 @@ npm test                 # Node.js 插件与本地签到回归
 
 ## 目录结构
 
-插件源码统一放在 `src/`，回归测试统一放在 `test/`，文档与包描述留在仓库根目录：
+插件源码统一放在 `src/`，回归测试统一放在 `test/`，说明文档放在 `docs/`，包描述与入口文档留在仓库根目录：
 
 - [src/index.mjs](<src/index.mjs>) — 宿主 hook、模型配置、选项与 fetch 处理链组装，仍为 `package.json` 的入口
 - [src/site-client.mjs](<src/site-client.mjs>) — 地址 / 认证头 / Cookie 解析、站点请求与余额字段转换
@@ -494,7 +498,7 @@ npm test                 # Node.js 插件与本地签到回归
 
 | 现象 | 原因 | 怎么办 |
 |---|---|---|
-| 所有模型都无响应，面板 0/7，且**没有任何报错** | 旧版把 `sk-…` 存进了 `metadata.endpoint`，请求打到 `sk-…/v1` | 当前登录流程不询问端点；既有非 URL 端点仍会被忽略并采用已存 apiBase 或默认值，升级无需重新登录 |
+| 所有模型都无响应，面板显示 0 个可用模型，且**没有任何报错** | 旧版把 `sk-…` 存进了 `metadata.endpoint`，请求打到 `sk-…/v1` | 当前登录流程不询问端点；既有非 URL 端点仍会被忽略并采用已存 apiBase 或默认值，升级无需重新登录 |
 | `/v1` 一律 `401 unauthorized client detected` | 自定义头里放了浏览器 `User-Agent` 等网关不认的标识 | 清掉该头，或用默认（`codex_cli_rs/0.101.0`） |
 | 某模型 `503 … 无可用渠道` | 面板列的是 models.dev 目录里已下架的模型 | 见「模型列表从哪来」，用站点真实列表或关掉该模型 |
 | 模型列表比预期少 | provider 编辑器里只选中了部分模型 | `magpie provider models agentrouter` 看 `pickedFrom`，在编辑器里勾选 |

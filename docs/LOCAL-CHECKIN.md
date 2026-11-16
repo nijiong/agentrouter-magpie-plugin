@@ -4,7 +4,7 @@
 
 ## 初始化与数据目录
 
-程序：[src/local-checkin.mjs](<src/local-checkin.mjs>)，不需要安装额外依赖。工具直接复用 [账号服务](<src/account-services.mjs>) 和 [站点客户端](<src/site-client.mjs>)，不加载或实例化宿主插件入口；安装时仍须保留完整运行时模块目录。请先在本机安装 Node.js；以下命令在插件仓库根目录执行，使用 PATH 中的 `node`，不依赖特定用户或其他应用附带的运行时。
+程序：[src/local-checkin.mjs](<../src/local-checkin.mjs>)，不需要安装额外依赖。工具直接复用 [账号服务](<../src/account-services.mjs>) 和 [站点客户端](<../src/site-client.mjs>)，不加载或实例化宿主插件入口；安装时仍须保留完整运行时模块目录。请先在本机安装 Node.js；以下命令在插件仓库根目录执行，使用 PATH 中的 `node`，不依赖特定用户或其他应用附带的运行时。
 
 ```powershell
 # 创建空配置并检查或设置专用目录权限；不联网
@@ -69,4 +69,4 @@ node ./src/local-checkin.mjs watch
 
 ## 离线验证
 
-[本地规则测试](<test/local-checkin.test.mjs>)验证节流、落盘、恢复、并发、脱敏和错误状态；[整合测试](<test/local-checkin.integration.test.mjs>)通过模拟 HTTP 验证共享签到实现，并验证移除宿主入口后本地签到仍可运行且保持冷却时间；[签到测试](<test/checkin.test.mjs>)覆盖登录与奖励判定。测试不使用真实凭据，不连接真实账号。
+[本地规则测试](<../test/local-checkin.test.mjs>)验证节流、落盘、恢复、并发、脱敏和错误状态；[整合测试](<../test/local-checkin.integration.test.mjs>)通过模拟 HTTP 验证共享签到实现，并验证移除宿主入口后本地签到仍可运行且保持冷却时间；[签到测试](<../test/checkin.test.mjs>)覆盖登录与奖励判定。测试不使用真实凭据，不连接真实账号。
